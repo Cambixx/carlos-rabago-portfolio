@@ -1,0 +1,16 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  # Vite 7 necesita Node 20.19+ o 22.12+.
+  NODE_VERSION = "22"
+
+# Los ficheros de /assets llevan un hash en el nombre: su URL no cambia nunca,
+# así que el navegador puede guardarlos un año sin revalidar. index.html se deja
+# con la política por defecto de Netlify (siempre revalidado) para que cada
+# despliegue nuevo se vea al momento.
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"

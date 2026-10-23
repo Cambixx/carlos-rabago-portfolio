@@ -1,0 +1,152 @@
+{
+    "sectionMeta": "28 HERRAMIENTAS",
+    "title": [
+        "Con qué",
+        "trabajo"
+    ],
+    "description": "Las herramientas detrás de cada web que pongo en producción: desde los fundamentos del maquetado hasta animación avanzada y arquitectura de CMS.",
+    "categories": [
+        {
+            "label": "FRONTEND",
+            "skills": [
+                {
+                    "name": "HTML5",
+                    "highlighted": false
+                },
+                {
+                    "name": "CSS3",
+                    "highlighted": false
+                },
+                {
+                    "name": "JavaScript ES6+",
+                    "highlighted": true
+                },
+                {
+                    "name": "React",
+                    "highlighted": true
+                },
+                {
+                    "name": "Tailwind CSS",
+                    "highlighted": false
+                },
+                {
+                    "name": "Bootstrap",
+                    "highlighted": false
+                }
+            ]
+        },
+        {
+            "label": "ANIMACIÓN Y 3D",
+            "skills": [
+                {
+                    "name": "GSAP",
+                    "highlighted": true
+                },
+                {
+                    "name": "Three.js",
+                    "highlighted": true
+                },
+                {
+                    "name": "Framer Motion",
+                    "highlighted": false
+                },
+                {
+                    "name": "WebGL",
+                    "highlighted": false
+                }
+            ]
+        },
+        {
+            "label": "BACKEND Y DATOS",
+            "skills": [
+                {
+                    "name": "Node.js",
+                    "highlighted": false
+                },
+                {
+                    "name": "PHP",
+                    "highlighted": false
+                },
+                {
+                    "name": "MySQL",
+                    "highlighted": false
+                }
+            ]
+        },
+        {
+            "label": "CMS Y PLANTILLAS",
+            "skills": [
+                {
+                    "name": "WordPress",
+                    "highlighted": true
+                },
+                {
+                    "name": "Timber",
+                    "highlighted": false
+                },
+                {
+                    "name": "Twig",
+                    "highlighted": false
+                }
+            ]
+        },
+        {
+            "label": "HERRAMIENTAS",
+            "skills": [
+                {
+                    "name": "Vite",
+                    "highlighted": false
+                },
+                {
+                    "name": "webpack",
+                    "highlighted": false
+                },
+                {
+                    "name": "Git",
+                    "highlighted": false
+                },
+                {
+                    "name": "GitHub",
+                    "highlighted": false
+                },
+                {
+                    "name": "Figma",
+                    "highlighted": false
+                }
+            ]
+        },
+        {
+            "label": "METODOLOGÍA",
+            "skills": [
+                {
+                    "name": "Scrum",
+                    "highlighted": false
+                },
+                {
+                    "name": "Kanban",
+                    "highlighted": false
+                },
+                {
+                    "name": "Jira",
+                    "highlighted": false
+                },
+                {
+                    "name": "Trello",
+                    "highlighted": false
+                },
+                {
+                    "name": "Core Web Vitals",
+                    "highlighted": true
+                },
+                {
+                    "name": "Accesibilidad (a11y)",
+                    "highlighted": false
+                },
+                {
+                    "name": "SEO",
+                    "highlighted": false
+                }
+            ]
+        }
+    ]
+}

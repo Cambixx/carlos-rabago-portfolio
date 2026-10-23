@@ -1,0 +1,182 @@
+{
+    "sectionMeta": "10 PROYECTOS",
+    "title": [
+        "Trabajos",
+        "Seleccionados"
+    ],
+    "description": "Webs en producción para marcas globales e instituciones — desarrolladas y mantenidas en Doers DF.",
+    "showreel": {
+        "label": "SHOWREEL 2026",
+        "techLine": "Remotion · React · WebGL"
+    },
+    "items": [
+        {
+            "title": "Doers DF",
+            "description": "Portfolio de agencia que explora la computación espacial con React-Three-Fiber, con modelos GLTF interactivos y transiciones de estado fluidas.",
+            "tech": [
+                "React",
+                "Three.js",
+                "GSAP",
+                "WebGL"
+            ],
+            "year": "2024",
+            "url": "https://doersdf.com/",
+            "image": "/projects/doers.webp",
+            "category": "Desarrollo Creativo",
+            "categoryKey": "creative"
+        },
+        {
+            "title": "Nexho — Mahou",
+            "description": "Plataforma de hostelería para los clientes de Mahou, que agiliza las solicitudes de servicio y la gestión de fidelización. Mantenimiento y proyectos asociados.",
+            "tech": [
+                "PHP",
+                "JavaScript",
+                "MySQL",
+                "CSS"
+            ],
+            "year": "2023",
+            "url": "https://www.somosnexho.com/",
+            "image": "/projects/nexho-web.webp",
+            "category": "Full-Stack",
+            "categoryKey": "fullstack"
+        },
+        {
+            "title": "Greenpeace España",
+            "description": "Trabajo de campaña y sensibilización para Greenpeace, incluyendo narrativa climática basada en datos. Mantenimiento y proyectos asociados.",
+            "tech": [
+                "JavaScript",
+                "HTML5",
+                "CSS3",
+                "Datos Interactivos"
+            ],
+            "year": "2024",
+            "url": "https://es.greenpeace.org/",
+            "image": "/projects/greenpeace.webp",
+            "category": "Desarrollo Creativo",
+            "categoryKey": "creative"
+        },
+        {
+            "title": "Budweiser España",
+            "description": "Portal oficial de Budweiser España: campañas de marca, experiencias promocionales y secciones con animación, construidas según los estándares globales de la marca.",
+            "tech": [
+                "WordPress",
+                "GSAP",
+                "PHP",
+                "Diseño de Animación"
+            ],
+            "year": "2024",
+            "url": "https://www.budweiser.es/",
+            "image": "/projects/budweiser.webp",
+            "category": "Motion Graphics",
+            "categoryKey": "motion"
+        },
+        {
+            "title": "Corona Official",
+            "description": "Portal oficial de Cerveza Corona con motion graphics de alta fidelidad y narrativa inmersiva para las experiencias 'outdoor' de la marca.",
+            "tech": [
+                "WordPress",
+                "GSAP",
+                "PHP",
+                "Diseño de Animación"
+            ],
+            "year": "2023",
+            "url": "https://www.cervezacorona.es/",
+            "image": "/projects/corona-web.webp",
+            "category": "Motion Graphics",
+            "categoryKey": "motion"
+        },
+        {
+            "title": "Tejiendo Derechos — Oxfam",
+            "description": "Plataforma interactiva de Oxfam Intermón para fortalecer la defensa de los derechos humanos mediante el aprendizaje colectivo y la financiación en red.",
+            "tech": [
+                "WordPress",
+                "Twig",
+                "PHP",
+                "Ingeniería UI"
+            ],
+            "year": "2023",
+            "url": "https://tejiendoderechos.oxfamintermon.org/",
+            "image": "/projects/oxfam.webp",
+            "category": "UI / Diseño",
+            "categoryKey": "ui"
+        },
+        {
+            "title": "Nextep Finance",
+            "description": "Plataforma de servicios financieros para Nextep, con una interfaz clara y de alto rendimiento para productos de inversión y asesoramiento.",
+            "tech": [
+                "WordPress",
+                "PHP",
+                "JavaScript",
+                "Arquitectura UI"
+            ],
+            "year": "2024",
+            "url": "https://nextepfinance.com/",
+            "image": "/projects/nextep.webp",
+            "category": "Full-Stack",
+            "categoryKey": "fullstack"
+        },
+        {
+            "title": "Boreal Wealth",
+            "description": "Plataforma global de gestión patrimonial para Boreal Capital, con interfaces de servicios financieros de alto rendimiento para los mercados suizo y estadounidense.",
+            "tech": [
+                "WordPress",
+                "PHP",
+                "Internacionalización"
+            ],
+            "year": "2022",
+            "url": "https://www.borealcm.com/",
+            "image": "/projects/boreal.webp",
+            "category": "Full-Stack",
+            "categoryKey": "fullstack"
+        },
+        {
+            "title": "IC-A Governance",
+            "description": "Portal profesional del Instituto de Consejeros-Administradores, centrado en las mejores prácticas de liderazgo corporativo.",
+            "tech": [
+                "WordPress",
+                "PHP",
+                "MySQL",
+                "Arquitectura UI"
+            ],
+            "year": "2022",
+            "url": "https://www.iconsejeros.com/",
+            "image": "/projects/ica.webp",
+            "category": "UI / Diseño",
+            "categoryKey": "ui"
+        },
+        {
+            "title": "Misstake",
+            "description": "Plataforma de co-creación de escenarios de crecimiento sostenible, que une creatividad y valor económico a través del conocimiento transversal.",
+            "tech": [
+                "WordPress",
+                "PHP",
+                "Twig",
+                "Diseño UX"
+            ],
+            "year": "2021",
+            "url": "https://misstake.es/",
+            "image": "/projects/misstake.webp",
+            "category": "UI / Diseño",
+            "categoryKey": "ui"
+        }
+    ],
+    "filterAllLabel": "TODOS",
+    "categories": [
+        {
+            "key": "creative",
+            "label": "Desarrollo Creativo"
+        },
+        {
+            "key": "fullstack",
+            "label": "Full-Stack"
+        },
+        {
+            "key": "motion",
+            "label": "Motion Graphics"
+        },
+        {
+            "key": "ui",
+            "label": "UI / Diseño"
+        }
+    ]
+}

@@ -1,0 +1,75 @@
+{
+    "sectionMeta": "2007 — HOY",
+    "title": [
+        "Experiencia",
+        "Profesional"
+    ],
+    "items": [
+        {
+            "line": "001",
+            "title": "Desarrollador Frontend",
+            "company": "DOERS DF",
+            "period": "2023 — Actualidad",
+            "description": "Desarrollo y maquetación de soluciones web de alto impacto para marcas globales e instituciones de primer nivel —Mahou, Greenpeace, Corona, Budweiser y Oxfam—, entregando interfaces alineadas con los más altos estándares de calidad y branding.",
+            "highlights": [
+                "Arquitecturas Frontend modulares y escalables con React y JavaScript (ES6+): componentes limpios, reutilizables y mantenibles que reducen el tiempo de desarrollo en nuevas funcionalidades.",
+                "Experiencias interactivas y 3D con GSAP, Three.js y Framer Motion, mejorando el engagement visual de las marcas y la retención de usuarios en sitios promocionales.",
+                "Temas a medida y despliegues dinámicos en WordPress mediante Timber y Twig, desacoplando la capa de presentación de la lógica del CMS.",
+                "Optimización continua del rendimiento web (Core Web Vitals): refactorización, gestión eficiente de assets y maquetación Mobile-First para mejorar carga, accesibilidad y SEO.",
+                "Colaboración en flujos ágiles: handoff preciso de Figma a código con diseñadores UI/UX y sincronización con backend PHP/MySQL para APIs y datos dinámicos."
+            ],
+            "isCurrent": true
+        },
+        {
+            "line": "002",
+            "title": "Desarrollador de Aplicaciones Web",
+            "company": "EDIX",
+            "period": "2021 — 2023",
+            "description": "Desarrollo de aplicaciones web funcionales y escalables en paralelo al programa de desarrollo web.",
+            "highlights": [
+                "Desarrollo de aplicaciones web funcionales y escalables.",
+                "Diseño y optimización de interfaces de usuario centradas en la experiencia y la usabilidad."
+            ],
+            "isCurrent": false
+        },
+        {
+            "line": "003",
+            "title": "Planificador de Logística y Operaciones",
+            "company": "Mercadona",
+            "period": "2016 — 2021",
+            "description": "Planificación de entregas y gestión de stock en una operación de retail de alto volumen: la base analítica de un enfoque sistemático aplicado hoy a la ingeniería.",
+            "highlights": [
+                "Planificación de entregas y gestión de stock.",
+                "Programación de rutas de transporte y facturación.",
+                "Análisis de reportes de ventas y supervisión de productos."
+            ],
+            "isCurrent": false
+        },
+        {
+            "line": "004",
+            "title": "Encargado de Tiendas de Servicios",
+            "company": "Drex Telecom",
+            "period": "2014 — 2016",
+            "description": "Gestión integral de tiendas de servicios de telecomunicaciones, desarrollando la resolución de problemas centrada en el usuario que hoy guía el diseño de interfaces.",
+            "highlights": [
+                "Encargado de tiendas de servicios.",
+                "Atención al cliente."
+            ],
+            "isCurrent": false
+        },
+        {
+            "line": "005",
+            "title": "Supervisor Comercial",
+            "company": "Iberia",
+            "period": "2007 — 2013",
+            "description": "Supervisión de la red comercial y apoyo a la fuerza de ventas en canal alimentación, coordinando operaciones entre logística y marketing.",
+            "highlights": [
+                "Supervisión de la red comercial y apoyo a la fuerza de ventas en canal alimentación.",
+                "Gestión de relaciones con clientes, control de pedidos y seguimiento de entregas.",
+                "Coordinación de promociones, implementación de estrategias de punto de venta y análisis de resultados.",
+                "Colaboración con los departamentos de logística y marketing para optimizar la distribución y visibilidad de productos."
+            ],
+            "isCurrent": false
+        }
+    ]
+}

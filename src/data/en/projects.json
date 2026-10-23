@@ -1,0 +1,182 @@
+{
+    "sectionMeta": "10 PROJECTS",
+    "title": [
+        "Selected",
+        "Works"
+    ],
+    "description": "Production sites for global brands and institutions — developed and maintained at Doers DF.",
+    "showreel": {
+        "label": "SHOWREEL 2026",
+        "techLine": "Remotion · React · WebGL"
+    },
+    "items": [
+        {
+            "title": "Doers DF",
+            "description": "Agency portfolio exploring spatial computing via React-Three-Fiber, featuring interactive GLTF models and smooth state transitions.",
+            "tech": [
+                "React",
+                "Three.js",
+                "GSAP",
+                "WebGL"
+            ],
+            "year": "2024",
+            "url": "https://doersdf.com/",
+            "image": "/projects/doers.webp",
+            "category": "Creative Development",
+            "categoryKey": "creative"
+        },
+        {
+            "title": "Nexho — Mahou",
+            "description": "Hospitality platform for Mahou venue owners, streamlining service requests and loyalty management. Ongoing maintenance and associated projects.",
+            "tech": [
+                "PHP",
+                "JavaScript",
+                "MySQL",
+                "CSS"
+            ],
+            "year": "2023",
+            "url": "https://www.somosnexho.com/",
+            "image": "/projects/nexho-web.webp",
+            "category": "Full-Stack",
+            "categoryKey": "fullstack"
+        },
+        {
+            "title": "Greenpeace España",
+            "description": "Campaign and awareness work for Greenpeace, including data-driven climate storytelling. Ongoing maintenance and associated projects.",
+            "tech": [
+                "JavaScript",
+                "HTML5",
+                "CSS3",
+                "Interactive Data"
+            ],
+            "year": "2024",
+            "url": "https://es.greenpeace.org/",
+            "image": "/projects/greenpeace.webp",
+            "category": "Creative Development",
+            "categoryKey": "creative"
+        },
+        {
+            "title": "Budweiser España",
+            "description": "Official Budweiser Spain portal: brand campaigns, promotional experiences and motion-led sections built to the brand's global standards.",
+            "tech": [
+                "WordPress",
+                "GSAP",
+                "PHP",
+                "Motion Design"
+            ],
+            "year": "2024",
+            "url": "https://www.budweiser.es/",
+            "image": "/projects/budweiser.webp",
+            "category": "Motion Graphics",
+            "categoryKey": "motion"
+        },
+        {
+            "title": "Corona Official",
+            "description": "Official Cerveza Corona portal featuring high-fidelity motion graphics and immersive storytelling for the brand's 'outdoor' experiences.",
+            "tech": [
+                "WordPress",
+                "GSAP",
+                "PHP",
+                "Motion Design"
+            ],
+            "year": "2023",
+            "url": "https://www.cervezacorona.es/",
+            "image": "/projects/corona-web.webp",
+            "category": "Motion Graphics",
+            "categoryKey": "motion"
+        },
+        {
+            "title": "Tejiendo Derechos — Oxfam",
+            "description": "Interactive platform for Oxfam Intermón to strengthen human rights advocacy through collective learning and network funding.",
+            "tech": [
+                "WordPress",
+                "Twig",
+                "PHP",
+                "UI Engineering"
+            ],
+            "year": "2023",
+            "url": "https://tejiendoderechos.oxfamintermon.org/",
+            "image": "/projects/oxfam.webp",
+            "category": "UI / Design",
+            "categoryKey": "ui"
+        },
+        {
+            "title": "Nextep Finance",
+            "description": "Financial services platform for Nextep, delivering a clear, high-performance interface for investment and advisory products.",
+            "tech": [
+                "WordPress",
+                "PHP",
+                "JavaScript",
+                "UI Architecture"
+            ],
+            "year": "2024",
+            "url": "https://nextepfinance.com/",
+            "image": "/projects/nextep.webp",
+            "category": "Full-Stack",
+            "categoryKey": "fullstack"
+        },
+        {
+            "title": "Boreal Wealth",
+            "description": "Global wealth management platform for Boreal Capital, delivering high-performance financial service interfaces for Swiss and US markets.",
+            "tech": [
+                "WordPress",
+                "PHP",
+                "Internationalization"
+            ],
+            "year": "2022",
+            "url": "https://www.borealcm.com/",
+            "image": "/projects/boreal.webp",
+            "category": "Full-Stack",
+            "categoryKey": "fullstack"
+        },
+        {
+            "title": "IC-A Governance",
+            "description": "Professional governance portal for the Instituto de Consejeros-Administradores, focused on best practices in corporate leadership.",
+            "tech": [
+                "WordPress",
+                "PHP",
+                "MySQL",
+                "UI Architecture"
+            ],
+            "year": "2022",
+            "url": "https://www.iconsejeros.com/",
+            "image": "/projects/ica.webp",
+            "category": "UI / Design",
+            "categoryKey": "ui"
+        },
+        {
+            "title": "Misstake",
+            "description": "Co-creation platform for sustainable growth scenarios, bridging creativity and economic value through transversal knowledge.",
+            "tech": [
+                "WordPress",
+                "PHP",
+                "Twig",
+                "UX Design"
+            ],
+            "year": "2021",
+            "url": "https://misstake.es/",
+            "image": "/projects/misstake.webp",
+            "category": "UI / Design",
+            "categoryKey": "ui"
+        }
+    ],
+    "filterAllLabel": "ALL",
+    "categories": [
+        {
+            "key": "creative",
+            "label": "Creative Development"
+        },
+        {
+            "key": "fullstack",
+            "label": "Full-Stack"
+        },
+        {
+            "key": "motion",
+            "label": "Motion Graphics"
+        },
+        {
+            "key": "ui",
+            "label": "UI / Design"
+        }
+    ]
+}

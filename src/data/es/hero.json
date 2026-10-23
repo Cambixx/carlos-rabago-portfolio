@@ -1,0 +1,34 @@
+{
+    "badge": "DISPONIBLE PARA CONTRATO — REMOTO O PRESENCIAL",
+    "subtitle": "Desarrollador Frontend e Ingeniero Industrial",
+    "title": [
+        "DESARROLLADOR",
+        "FRONTEND"
+    ],
+    "titleSeparator": "—",
+    "description": "Desarrollador Frontend e Ingeniero Industrial especializado en la construcción de interfaces web modernas, dinámicas e interactivas. Combino el pensamiento estructurado de la ingeniería con estándares de rendimiento, SEO y accesibilidad para desarrollar productos digitales escalables y de alto impacto para marcas líderes.",
+    "location": "Madrid, España (UTC+1)",
+    "coordinates": "40.4168° N, 3.7038° O — 2026",
+    "stats": [
+        {
+            "value": "2023",
+            "label": "En producción desde"
+        },
+        {
+            "value": "10+",
+            "label": "Proyectos de Marca"
+        },
+        {
+            "value": "ING",
+            "label": "Ing. Industrial"
+        }
+    ],
+    "coreStack": [
+        "React",
+        "JavaScript ES6+",
+        "GSAP",
+        "Three.js",
+        "Framer Motion",
+        "WordPress"
+    ]
+}

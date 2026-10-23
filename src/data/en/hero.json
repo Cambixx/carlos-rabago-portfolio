@@ -1,0 +1,34 @@
+{
+    "badge": "AVAILABLE FOR CONTRACT — REMOTE OR ON-SITE",
+    "subtitle": "Frontend Developer & Industrial Engineer",
+    "title": [
+        "FRONTEND",
+        "DEVELOPER"
+    ],
+    "titleSeparator": "—",
+    "description": "Frontend Developer and Industrial Engineer building modern, dynamic and interactive web interfaces. I pair engineering-grade structured thinking with performance, SEO and accessibility standards to ship scalable, high-impact products for leading brands.",
+    "location": "Madrid, Spain (UTC+1)",
+    "coordinates": "40.4168° N, 3.7038° W — 2026",
+    "stats": [
+        {
+            "value": "2023",
+            "label": "In production since"
+        },
+        {
+            "value": "10+",
+            "label": "Brand Projects"
+        },
+        {
+            "value": "ENG",
+            "label": "Industrial Eng."
+        }
+    ],
+    "coreStack": [
+        "React",
+        "JavaScript ES6+",
+        "GSAP",
+        "Three.js",
+        "Framer Motion",
+        "WordPress"
+    ]
+}

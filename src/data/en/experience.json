@@ -1,0 +1,75 @@
+{
+    "sectionMeta": "2007 — TODAY",
+    "title": [
+        "Professional",
+        "Experience"
+    ],
+    "items": [
+        {
+            "line": "001",
+            "title": "Frontend Developer",
+            "company": "DOERS DF",
+            "period": "2023 — Present",
+            "description": "Building high-impact web solutions for global brands and first-tier institutions — Mahou, Greenpeace, Corona, Budweiser and Oxfam — delivering interfaces aligned with the highest quality and branding standards.",
+            "highlights": [
+                "Modular, scalable frontend architectures with React and JavaScript (ES6+): clean, reusable components that cut delivery time on new features.",
+                "Interactive and 3D experiences with GSAP, Three.js and Framer Motion, raising visual engagement and user retention on promotional sites.",
+                "Custom WordPress themes and dynamic deployments through Timber and Twig, decoupling the presentation layer from CMS logic.",
+                "Continuous Core Web Vitals work: refactoring, asset strategy and mobile-first layout for better load times, a11y and SEO.",
+                "Agile collaboration: precise Figma-to-code handoff with UI/UX designers and PHP/MySQL backend sync for APIs and dynamic data."
+            ],
+            "isCurrent": true
+        },
+        {
+            "line": "002",
+            "title": "Web Applications Developer",
+            "company": "EDIX",
+            "period": "2021 — 2023",
+            "description": "Development of functional, scalable web applications alongside the web development programme.",
+            "highlights": [
+                "Built functional and scalable web applications from the ground up.",
+                "Designed and optimised user interfaces centred on experience and usability."
+            ],
+            "isCurrent": false
+        },
+        {
+            "line": "003",
+            "title": "Logistics & Operations Planner",
+            "company": "Mercadona",
+            "period": "2016 — 2021",
+            "description": "Delivery planning and stock management across a high-volume retail operation — the analytical groundwork behind a systematic approach to engineering.",
+            "highlights": [
+                "Delivery planning and stock management.",
+                "Transport route scheduling and invoicing.",
+                "Sales report analysis and product supervision."
+            ],
+            "isCurrent": false
+        },
+        {
+            "line": "004",
+            "title": "Service Store Manager",
+            "company": "Drex Telecom",
+            "period": "2014 — 2016",
+            "description": "Ran telecommunications service stores end to end, developing the user-centric problem solving that now informs interface design.",
+            "highlights": [
+                "Service store management.",
+                "Customer support and front-line service."
+            ],
+            "isCurrent": false
+        },
+        {
+            "line": "005",
+            "title": "Commercial Supervisor",
+            "company": "Iberia",
+            "period": "2007 — 2013",
+            "description": "Supervised the commercial network and supported the sales force in the food channel, coordinating operations across logistics and marketing.",
+            "highlights": [
+                "Commercial network supervision and sales-force support in the food channel.",
+                "Client relationship management, order control and delivery tracking.",
+                "Promotion coordination, point-of-sale strategy and results analysis.",
+                "Collaboration with logistics and marketing to optimise distribution and product visibility."
+            ],
+            "isCurrent": false
+        }
+    ]
+}

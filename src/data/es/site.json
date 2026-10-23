@@ -1,0 +1,39 @@
+{
+    "brand": "CARLOS RÁBAGO",
+    "version": "v2.6",
+    "nav": [
+        {
+            "num": "01",
+            "label": "Proyectos",
+            "href": "#projects"
+        },
+        {
+            "num": "02",
+            "label": "Experiencia",
+            "href": "#experience"
+        },
+        {
+            "num": "03",
+            "label": "Formación",
+            "href": "#education"
+        },
+        {
+            "num": "04",
+            "label": "Stack",
+            "href": "#stack"
+        },
+        {
+            "num": "05",
+            "label": "Contacto",
+            "href": "#contact"
+        }
+    ],
+    "statusBar": {
+        "text": "DISPONIBLE PARA CONTRATO",
+        "color": "#22c55e"
+    },
+    "footer": {
+        "left": "© 2026 — CARLOS RÁBAGO — v2.6",
+        "right": "ÚLTIMA ACTUALIZACIÓN: FEB 2026"
+    }
+}

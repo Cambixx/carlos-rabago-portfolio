@@ -1,0 +1,32 @@
+{
+    "sectionMeta": "MADRID · UTC+1",
+    "title": [
+        "Hablemos",
+        "de tu Proyecto"
+    ],
+    "availability": "DISPONIBLE PARA FREELANCE Y CONTRATO — MADRID / REMOTO",
+    "email": "carlosmiguel40@gmail.com",
+    "cta": "[ EMPEZAR UN PROYECTO ]",
+    "socialLabel": "DIRECTO",
+    "social": [
+        {
+            "label": "LinkedIn",
+            "url": "https://www.linkedin.com/in/carlos-miguel-r%C3%A1bago-torcates-2a5447208",
+            "path": "linkedin.com/in/carlos-miguel-rábago-torcates"
+        },
+        {
+            "label": "Teléfono",
+            "url": "tel:+34603728243",
+            "path": "+34 603 728 243"
+        },
+        {
+            "label": "Ubicación",
+            "url": "https://maps.google.com/?q=Madrid,Spain",
+            "path": "Madrid, España — 28018"
+        }
+    ],
+    "cv": {
+        "url": "/cv/carlos-rabago-cv-es.pdf",
+        "label": "Descargar CV (PDF)"
+    }
+}

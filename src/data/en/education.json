@@ -1,0 +1,31 @@
+{
+    "sectionMeta": "2 DEGREES",
+    "title": [
+        "Education",
+        "& Background"
+    ],
+    "description": "Industrial engineering discipline applied to frontend architecture — structured thinking, measurable standards, systems that scale.",
+    "items": [
+        {
+            "line": "001",
+            "title": "Web Application Development",
+            "school": "Edix",
+            "period": "2023",
+            "description": "Specialised programme in modern web application development: frontend architecture, JavaScript ecosystems, backend fundamentals and database design."
+        },
+        {
+            "line": "002",
+            "title": "Industrial Engineering",
+            "school": "Universidad Yacambú",
+            "period": "2009",
+            "description": "Engineering degree focused on process optimisation, systems analysis and operational efficiency — the structured mindset behind every interface I build."
+        }
+    ],
+    "languages": {
+        "label": "LANGUAGES",
+        "items": [
+            "Spanish — Native",
+            "English — B2"
+        ]
+    }
+}

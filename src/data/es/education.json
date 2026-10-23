@@ -1,0 +1,31 @@
+{
+    "sectionMeta": "2 TITULACIONES",
+    "title": [
+        "Formación",
+        "y Trayectoria"
+    ],
+    "description": "La disciplina de la ingeniería industrial aplicada a la arquitectura frontend: pensamiento estructurado, estándares medibles y sistemas que escalan.",
+    "items": [
+        {
+            "line": "001",
+            "title": "Desarrollo de Aplicaciones Web",
+            "school": "Edix",
+            "period": "2023",
+            "description": "Programa especializado en desarrollo de aplicaciones web modernas: arquitectura frontend, ecosistemas JavaScript, fundamentos de backend y diseño de bases de datos."
+        },
+        {
+            "line": "002",
+            "title": "Ingeniería Industrial",
+            "school": "Universidad Yacambú",
+            "period": "2009",
+            "description": "Titulación en ingeniería centrada en optimización de procesos, análisis de sistemas y eficiencia operativa: la mentalidad estructurada que hay detrás de cada interfaz que construyo."
+        }
+    ],
+    "languages": {
+        "label": "IDIOMAS",
+        "items": [
+            "Español — Nativo",
+            "Inglés — B2"
+        ]
+    }
+}

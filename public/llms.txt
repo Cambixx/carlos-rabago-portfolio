@@ -1,0 +1,17 @@
+# Carlos Rábago — Desarrollador Frontend e Ingeniero Industrial
+
+> Portfolio de Carlos Rábago, desarrollador frontend en Madrid (España). Interfaces web modernas e interactivas con React, GSAP, Three.js y WordPress (Timber/Twig) para marcas como Mahou, Greenpeace, Corona, Budweiser y Oxfam.
+
+El sitio es una habitación 3D navegable. Añade `?flat` a la URL para la versión plana con todo el contenido en una sola página.
+
+## Secciones
+
+- [Proyectos](/?flat#projects): webs en producción para marcas e instituciones.
+- [Experiencia](/?flat#experience): Doers DF (2023 — actualidad), EDIX, Mercadona, Drex Telecom, Iberia.
+- [Sobre mí](/?flat#about): formación (Ingeniería Industrial, Desarrollo de Aplicaciones Web) y stack.
+- [Contacto](/?flat#contact): carlosmiguel40@gmail.com · disponible para freelance y contrato, Madrid o remoto.
+- [CV en PDF](/cv/carlos-rabago-cv-es.pdf)
+
+## Créditos
+
+- Modelo 3D de los altavoces: «Speaker Vipe Nitro X7» de madebyvipe (https://sketchfab.com/madebyvipe), CC BY 4.0.
