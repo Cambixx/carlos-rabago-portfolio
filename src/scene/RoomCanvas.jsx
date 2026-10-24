@@ -7,6 +7,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { CSS3DObject, CSS3DRenderer } from 'three/addons/renderers/CSS3DRenderer.js';
 import { getMusicLevel } from '../lib/audio';
 import { buildRoom } from './buildRoom';
+import { MODELS, loadModel } from './models';
 import { LOOK_LIMITS, STOPS, ZOOM_LIMITS } from './stops';
 
 const UP = new THREE.Vector3(0, 1, 0);
@@ -77,8 +78,12 @@ export default function RoomCanvas({
         let cleanup = () => {};
 
         (async () => {
-            // Las insignias, el reloj y la pantalla se pintan en canvas con las
-            // webfonts: hay que esperarlas o salen con la tipografía de reserva.
+            // La oficina (.glb) se descarga mientras corre el boot. Las insignias, el reloj y
+            // la pantalla se pintan en canvas con las webfonts: hay que esperarlas o salen
+            // con la tipografía de reserva.
+            const officeLoad = loadModel(MODELS.office.url);
+            // la silla es opcional: si no carga, se usa la de la oficina
+            const chairLoad = loadModel(MODELS.chair.url).catch(() => null);
             try {
                 await Promise.all([
                     document.fonts.load('700 30px "Space Grotesk Variable"'),
@@ -87,6 +92,15 @@ export default function RoomCanvas({
                 ]);
             } catch {
                 /* si falla, se dibuja con la fuente de reserva */
+            }
+            let office;
+            let chairModel;
+            try {
+                [office, chairModel] = await Promise.all([officeLoad, chairLoad]);
+            } catch {
+                // sin la sala no hay escena: la versión plana tiene todo el contenido
+                if (!disposed) callbacks.current.onUnsupported?.();
+                return;
             }
             if (disposed) return;
 
@@ -110,7 +124,7 @@ export default function RoomCanvas({
             renderer.domElement.className = 'room-canvas';
             mount.prepend(renderer.domElement);
 
-            const room = buildRoom({ lowPower, lang });
+            const room = buildRoom({ office, chairModel, lowPower, lang });
             roomRef.current = room;
             room.apply(live.current.world);
             const { scene, hotspots } = room;
@@ -255,6 +269,9 @@ export default function RoomCanvas({
                 const hit = raycaster.intersectObjects(scene.children, true)[0];
                 return hit?.object.userData.item ?? null;
             };
+
+            // solo en desarrollo: acceso a la escena desde la consola / pruebas automáticas
+            if (import.meta.env.DEV) window.__room = { scene, camera, pick };
 
             const setHovered = (item, x, y) => {
                 if (item !== hovered) {

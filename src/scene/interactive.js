@@ -9,7 +9,8 @@ const HIGHLIGHT = new THREE.Color(0xff9ebd);
  *   a otros objetos que compartieran material.
  * - Marca cada malla con `userData.item`, que es lo que busca el raycast.
  *
- * `def` lleva { key, id, label, hint, section, focus, onClick }. Las referencias
+ * `def` lleva { key, id, label, hint, section, focus, onClick, tint }. `tint` (0..1)
+ * suaviza el resaltado en modelos realistas y oscuros. Las referencias
  * a materiales deben leerse después de llamar a esta función (se sustituyen).
  */
 export function makeInteractive(root, def) {
@@ -27,7 +28,7 @@ export function makeInteractive(root, def) {
             });
         });
     };
-    register(root);
+    register(root, def.tint ?? 1);
 
     const state = { hover: 0, target: 0 };
     const item = {
@@ -43,8 +44,12 @@ export function makeInteractive(root, def) {
             state.hover += (state.target - state.hover) * Math.min(1, dt * 10);
             if (state.target === 0 && state.hover < 0.002) state.hover = 0;
             tinted.forEach(({ m, base, baseIntensity, strength }) => {
-                m.emissive.copy(base).lerp(HIGHLIGHT, state.hover * 0.32 * strength);
-                m.emissiveIntensity = baseIntensity + state.hover * 0.5 * strength;
+                // si otra animación cambia el emisivo (p. ej. la luz horneada según la hora),
+                // deja su valor en userData y el resaltado parte de ahí
+                const fromColor = m.userData.emissiveBase ?? base;
+                const fromIntensity = m.userData.emissiveIntensityBase ?? baseIntensity;
+                m.emissive.copy(fromColor).lerp(HIGHLIGHT, state.hover * 0.32 * strength);
+                m.emissiveIntensity = fromIntensity + state.hover * 0.5 * strength;
             });
         },
     };

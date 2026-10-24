@@ -293,8 +293,9 @@ export function ContactPanel() {
             <p className="foot">{site.footer.left}</p>
             <p className="credits">
                 {t.panels.credits}{' '}
-                {Object.values(CREDITS).map((credit) => (
+                {Object.values(CREDITS).map((credit, i) => (
                     <span key={credit.url}>
+                        {i > 0 && ' / '}
                         <a href={credit.url} target="_blank" rel="noopener noreferrer">
                             «{credit.title}»
                         </a>{' '}

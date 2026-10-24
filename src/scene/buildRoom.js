@@ -1,34 +1,22 @@
 import * as THREE from 'three';
-import {
-    badgeTexture,
-    cityTexture,
-    dropletsTexture,
-    createClock,
-    createScreen,
-    keyboardTexture,
-    lightPatchTexture,
-    parquetTexture,
-    pegboardTexture,
-    posterTexture,
-    rng,
-    roundSprite,
-    rainTexture,
-    rugTexture,
-    snowTexture,
-    wallTexture,
-} from './textures';
+import { badgeTexture, createClock, createScreen, dropletsTexture, keyboardTexture, pegboardTexture, rainTexture, rng, roundSprite, snowTexture } from './textures';
 import { makeInteractive, noRaycast } from './interactive';
 import { MODELS, loadModel } from './models';
 import { getContent } from '../content';
 import { STRINGS } from '../i18n/strings';
 
 const PINK = 0xff9ebd;
-const WARM = 0xffd29a;
 const BADGE_ACCENTS = ['#ff9ebd', '#7fd6ff', '#b79cff', '#ffd29a', '#4ade80'];
 
-/** Medidas de la sala (metros). El fondo está en z = -ROOM.back. */
-const ROOM = { halfWidth: 3.4, back: 3.4, front: 3.4, height: 3 };
-const DESK_Z = -2.85;
+/**
+ * Medidas de la sala (metros, coordenadas de mundo). La oficina (.glb) se gira y
+ * se desplaza para que la cristalera quede al fondo (z ≈ -4.9), el suelo en y = 0
+ * y la sala se abra hacia la cámara (+z). Todo lo demás se coloca respecto a esto.
+ */
+const OFFICE = { position: [0, 1.45, -4.9], rotationY: -Math.PI / 2 };
+const DESK = { top: 0.81, front: -0.66, back: -1.37 };
+const GLASS = { z: -4.95, width: 8.7, height: 4.05, centerY: 2.15 };
+const WALL_RIGHT = 4.35; // pared de hormigón de la derecha (el muro de las insignias)
 
 const easeInOut = (t) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
 
@@ -48,26 +36,43 @@ function addMesh(parent, geometry, material, [x, y, z], { shadow = true, rot } =
 
 const box = (w, h, d) => new THREE.BoxGeometry(w, h, d);
 
-function group(parent, [x, y, z] = [0, 0, 0]) {
+/**
+ * Normaliza un modelo cargado: lo escala a `height` metros de alto, lo apoya en
+ * y = 0 y lo centra en x/z. Devuelve un grupo listo para colocar y clonar.
+ */
+function fitModel(model, height) {
+    const bounds = new THREE.Box3().setFromObject(model);
+    const size = bounds.getSize(new THREE.Vector3());
+    const center = bounds.getCenter(new THREE.Vector3());
+    const scale = height / size.y;
+    model.scale.multiplyScalar(scale);
+    model.position.set(-center.x * scale, -bounds.min.y * scale, -center.z * scale);
+    const fitted = new THREE.Group();
+    fitted.add(model);
+    return fitted;
+}
+
+function group(parent, [x, y, z] = [0, 0, 0], rotationY = 0) {
     const g = new THREE.Group();
     g.position.set(x, y, z);
+    g.rotation.y = rotationY;
     parent.add(g);
     return g;
 }
 
 /**
- * Construye la habitación. Devuelve:
+ * Construye la sala sobre el modelo de oficina ya cargado. Devuelve:
  * - `scene`
  * - `hotspots`: los rombos de sección (para las etiquetas flotantes)
+ * - `screen`: dónde va la pantalla HTML real del monitor (CSS3D)
  * - `update(time, dt, { musicLevel })`: animaciones y transiciones
- * - `apply({ lamp, night, music })`: estado de la sala que controla la app
+ * - `apply({ lamp, sky, music, weather })`: estado de la sala que controla la app
  *
  * Los objetos clicables se encuentran por raycast a través de `userData.item`.
  */
-export function buildRoom({ lowPower = false, lang = 'es' } = {}) {
+export function buildRoom({ office, chairModel = null, lowPower = false, lang = 'es' }) {
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x0b0d17);
-    scene.fog = new THREE.Fog(0x0b0d17, 7, 16);
 
     const ctx = {
         scene,
@@ -100,28 +105,25 @@ export function buildRoom({ lowPower = false, lang = 'es' } = {}) {
         Object.keys(ctx.world).forEach((key) => {
             ctx.world[key] += (ctx.target[key] - ctx.world[key]) * k;
         });
+        // tormenta: de vez en cuando, un relámpago que se apaga en décimas de segundo
+        if (ctx.storm && Math.random() < dt * 0.15) ctx.flash = 1;
+        ctx.flash *= Math.exp(-dt * 7);
     });
 
-    const backZ = -ROOM.back;
-    buildShell(ctx, backZ);
-    buildWindow(ctx, backZ);
-    buildPegboard(ctx, backZ);
-    buildDesk(ctx);
-    buildShelves(ctx);
-    buildDecor(ctx, backZ);
-    buildSpeakers(ctx, backZ);
-    buildPlant(ctx, backZ);
-    buildStringLights(ctx);
-    buildClock(ctx);
+    setupOffice(ctx, office, chairModel);
+    buildWeather(ctx);
+    buildDeskItems(ctx);
+    buildFeatureWall(ctx);
+    buildSpeakers(ctx);
     buildDust(ctx);
     buildLights(ctx);
 
     // Rombos rosas que flotan sobre cada zona: atajos a cada sección.
     [
-        { id: 'projects', num: '01', at: [-0.5, 1.82, -3.0] },
-        { id: 'experience', num: '02', at: [1.75, 2.42, -3.2] },
-        { id: 'about', num: '03', at: [-0.3, 2.62, -3.2] },
-        { id: 'contact', num: '04', at: [0.75, 1.32, -2.85] },
+        { id: 'projects', num: '01', at: [0, 1.82, -1.25] },
+        { id: 'experience', num: '02', at: [WALL_RIGHT - 0.3, 2.72, 1.0] },
+        { id: 'about', num: '03', at: [-1.6, 2.6, -4.3] },
+        { id: 'contact', num: '04', at: [1.05, 1.34, -1.1] },
     ].forEach((spot, i) => ctx.hotspots.push(buildHotspot(ctx, spot, i)));
 
     const update = (time, dt, { musicLevel = 0 } = {}) => {
@@ -143,7 +145,7 @@ export function buildRoom({ lowPower = false, lang = 'es' } = {}) {
         ctx.storm = weather === 'storm';
     };
 
-    // los modelos que cargan después no deben añadirse a una escena ya desmontada
+    // los modelos que cargan después (altavoces) no deben añadirse a una escena ya desmontada
     const dispose = () => {
         ctx.disposed = true;
     };
@@ -151,240 +153,220 @@ export function buildRoom({ lowPower = false, lang = 'es' } = {}) {
     return { scene, hotspots: ctx.hotspots, screen: ctx.screenAnchor, update, apply, dispose };
 }
 
-function buildShell({ scene, animations, world }, backZ) {
-    const { halfWidth, front, height } = ROOM;
-    const depth = front + -backZ;
-    const centerZ = (front + backZ) / 2;
+/**
+ * Coloca la oficina y adapta su luz horneada (texturas emisivas) a la hora, el
+ * tiempo y la lámpara. Reaprovecha sus piezas: la cristalera es la "ventana", la
+ * silla gira y las plantas se agitan.
+ */
+function setupOffice(ctx, office, chairModel) {
+    const { scene } = ctx;
+    const root = group(scene, OFFICE.position, OFFICE.rotationY);
+    root.add(office);
+    root.updateMatrixWorld(true);
 
-    addMesh(scene, new THREE.PlaneGeometry(halfWidth * 2, depth), std(0xffffff, { map: parquetTexture(), roughness: 0.55 }), [0, 0, centerZ], {
-        shadow: false,
-        rot: [-Math.PI / 2, 0, 0],
-    });
-    addMesh(scene, new THREE.PlaneGeometry(halfWidth * 2, height), std(0xffffff, { map: wallTexture(5, 1), roughness: 0.9 }), [0, height / 2, backZ], {
-        shadow: false,
-    });
-    const sideMat = () => std(0xffffff, { map: wallTexture(5, 1), roughness: 0.9 });
-    addMesh(scene, new THREE.PlaneGeometry(depth, height), sideMat(), [-halfWidth, height / 2, centerZ], { shadow: false, rot: [0, Math.PI / 2, 0] });
-    addMesh(scene, new THREE.PlaneGeometry(depth, height), sideMat(), [halfWidth, height / 2, centerZ], { shadow: false, rot: [0, -Math.PI / 2, 0] });
-    addMesh(scene, new THREE.PlaneGeometry(halfWidth * 2, depth), std(0x12142a), [0, height, centerZ], { shadow: false, rot: [Math.PI / 2, 0, 0] });
-    addMesh(scene, box(halfWidth * 2, 0.09, 0.03), std(0x0c0d1b), [0, 0.045, backZ + 0.015], { shadow: false });
-
-    // mancha de luz de la ventana sobre el suelo: rosa al atardecer, azul de noche
-    const patch = noRaycast(
-        new THREE.Mesh(
-            new THREE.PlaneGeometry(2.2, 2.2),
-            new THREE.MeshBasicMaterial({
-                map: lightPatchTexture(),
-                transparent: true,
-                blending: THREE.AdditiveBlending,
-                depthWrite: false,
-                toneMapped: false,
-            }),
-        ),
-    );
-    patch.rotation.set(-Math.PI / 2, 0, 0.35);
-    patch.position.set(-0.1, 0.012, -1.3);
-    scene.add(patch);
-    const duskTint = new THREE.Color(0xffbec8);
-    const dayTint = new THREE.Color(0xfff2dc);
-    const nightTint = new THREE.Color(0x9fb0ff);
-    animations.push(() => {
-        patch.material.color.copy(duskTint).lerp(dayTint, world.day).lerp(nightTint, world.night);
-        patch.material.opacity = (0.22 + world.day * 0.12 - world.night * 0.07) * (1 - world.fog * 0.5);
+    const byMaterial = {};
+    office.traverse((obj) => {
+        if (!obj.isMesh) return;
+        (byMaterial[obj.material.name] ??= []).push(obj);
+        // sombras de nuestros objetos sobre la mesa, la alfombra y el suelo
+        obj.receiveShadow = true;
+        obj.castShadow = false;
     });
 
-    addMesh(scene, new THREE.PlaneGeometry(3.6, 2.4), std(0xffffff, { map: rugTexture(), roughness: 1 }), [-0.45, 0.008, -1.7], {
-        shadow: false,
-        rot: [-Math.PI / 2, 0, 0],
+    // La silla: se pasa al lado de la cámara, girada, como si alguien acabara de levantarse.
+    // Un pivote en su centro permite que gire sobre sí misma al hacer clic. Si se cargó
+    // MODELS.chair, sustituye a la de la oficina.
+    const officeChair = byMaterial.Chair[0];
+    let chair;
+    if (chairModel) {
+        // la silla de la oficina ya no se usa: fuera de la escena y de la memoria de la GPU
+        officeChair.removeFromParent();
+        officeChair.geometry.dispose();
+        officeChair.material.map?.dispose();
+        officeChair.material.emissiveMap?.dispose();
+        officeChair.material.dispose();
+        chair = group(scene);
+        const fitted = fitModel(chairModel, MODELS.chair.height);
+        fitted.rotation.y = MODELS.chair.facing;
+        fitted.traverse((obj) => {
+            if (!obj.isMesh) return;
+            obj.castShadow = true;
+            obj.receiveShadow = true;
+        });
+        chair.add(fitted);
+    } else {
+        const chairCenter = new THREE.Box3().setFromObject(officeChair).getCenter(new THREE.Vector3());
+        chair = group(scene, [chairCenter.x, 0, chairCenter.z]);
+        chair.attach(officeChair);
+        officeChair.castShadow = true;
+    }
+    chair.position.set(0.95, 0, -0.05);
+    const chairBaseRotation = Math.PI + 0.55;
+    chair.rotation.y = chairBaseRotation;
+    let spin = 0;
+    let velocity = 0;
+    ctx.interactive(chair, {
+        key: 'chair',
+        tint: chairModel ? 0.35 : 1, // la silla importada es oscura y realista: resaltado más suave
+        onClick: () => {
+            velocity += 9;
+        },
     });
+    ctx.animations.push((t, dt) => {
+        spin += velocity * dt;
+        velocity *= Math.exp(-dt * 1.4);
+        chair.rotation.y = chairBaseRotation + spin;
+    });
+
+    // Las plantas son una sola malla: dos cajas invisibles hacen de zona de clic
+    // (más barato que el raycast contra miles de hojas) y al pulsar se agitan.
+    const plants = byMaterial.Plants[0];
+    noRaycast(plants);
+    const plantBase = plants.position.clone();
+    const plantGroup = group(scene);
+    [-3.85, 3.85].forEach((x) => {
+        addMesh(plantGroup, box(1.1, 1.9, 1.1), new THREE.MeshBasicMaterial({ visible: false }), [x, 0.95, -4.38], { shadow: false });
+    });
+    let rustle = 0;
+    ctx.interactive(plantGroup, {
+        key: 'plant',
+        onClick: () => {
+            rustle = 1;
+        },
+    });
+    ctx.animations.push((t, dt) => {
+        rustle *= Math.exp(-dt * 1.6);
+        plants.position.set(plantBase.x + Math.sin(t * 23) * 0.006 * rustle, plantBase.y, plantBase.z + Math.cos(t * 19) * 0.006 * rustle);
+    });
+
+    // La cristalera hace de ventana: clic para cambiar la hora.
+    const glass = byMaterial.Glass[0];
+    ctx.interactive(glass, { key: 'window' });
+
+    // Luz horneada: se tiñe y se atenúa según la hora; la lámpara del techo se apaga con la del escritorio.
+    const baked = [];
+    office.traverse((obj) => {
+        if (!obj.isMesh || obj === glass) return;
+        const m = obj.material;
+        if (m.name === 'LightEmission' || m.name === 'Background') return;
+        if (!m.emissiveMap) return;
+        // la luz de nuestras lámparas suma algo encima, pero la base es la horneada
+        m.color.multiplyScalar(0.3);
+        baked.push(m);
+    });
+    // si se usa la silla de la oficina, salió de su jerarquía (para girar sobre su pivote):
+    // su material (ya clonado por makeInteractive) se añade a mano a la luz horneada
+    if (!chairModel) {
+        officeChair.material.color.multiplyScalar(0.3);
+        baked.push(officeChair.material);
+    }
+
+    const ceiling = byMaterial.LightEmission[0].material;
+    ceiling.emissive = new THREE.Color(0xffffff);
+
+    // el exterior es solo emisivo: nuestras luces no deben aclararlo de noche
+    const sky = byMaterial.Background[0].material;
+    sky.color.setScalar(0);
+
+    const tint = { dusk: new THREE.Color(1, 0.8, 0.74), day: new THREE.Color(1, 1, 1), night: new THREE.Color(0.55, 0.62, 1) };
+    const skyTint = { dusk: new THREE.Color(1, 0.56, 0.5), day: new THREE.Color(1, 1, 1), night: new THREE.Color(0.06, 0.08, 0.2) };
+    const fogTint = new THREE.Color(0.62, 0.65, 0.72);
+    const white = new THREE.Color(1, 1, 1);
+    const roomColor = new THREE.Color();
+    const skyColor = new THREE.Color();
+
+    ctx.animations.push(() => {
+        const W = ctx.world;
+        const dusk = Math.max(0, 1 - W.day - W.night);
+        const daylight = W.day + dusk * 0.66 + W.night * 0.24;
+        const level = daylight * (0.8 + 0.2 * W.lamp) * (1 - 0.15 * W.fog - 0.15 * W.rain) + ctx.flash * 0.6;
+        roomColor.copy(tint.dusk).lerp(tint.day, W.day).lerp(tint.night, W.night);
+        baked.forEach((m) => {
+            m.emissive.copy(roomColor);
+            m.emissiveIntensity = level;
+            m.userData.emissiveBase = roomColor;
+            m.userData.emissiveIntensityBase = level;
+        });
+
+        skyColor
+            .copy(skyTint.dusk)
+            .lerp(skyTint.day, W.day)
+            .lerp(skyTint.night, W.night)
+            .lerp(fogTint.clone().multiplyScalar(0.25 + 0.75 * daylight), Math.min(1, W.fog * 0.7 + W.rain * 0.3 + W.snow * 0.4))
+            .lerp(white, ctx.flash * 0.8);
+        sky.emissive.copy(skyColor);
+
+        ceiling.emissiveIntensity = W.lamp * (ctx.hdr ? 2.4 : 1);
+    });
+
 }
 
-/** Ventana con fundido atardecer ↔ noche. Clic: cambia la hora. */
-function buildWindow(ctx, backZ) {
-    const cx = -0.3;
-    const cy = 1.7;
-    const w = 1.5;
-    const h = 1.3;
-    const z = backZ + 0.012;
-    const win = group(ctx.scene);
-
-    const dusk = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: cityTexture('dusk'), color: ctx.glow(0xffffff, 1.25), toneMapped: false }));
-    dusk.position.set(cx, cy, z);
-    const night = new THREE.Mesh(
-        new THREE.PlaneGeometry(w, h),
-        new THREE.MeshBasicMaterial({ map: cityTexture('night'), color: ctx.glow(0xffffff, 1.25), toneMapped: false, transparent: true, opacity: 0 }),
-    );
-    night.position.set(cx, cy, z + 0.002);
-    const day = new THREE.Mesh(
-        new THREE.PlaneGeometry(w, h),
-        new THREE.MeshBasicMaterial({ map: cityTexture('day'), color: ctx.glow(0xffffff, 1.25), toneMapped: false, transparent: true, opacity: 0 }),
-    );
-    day.position.set(cx, cy, z + 0.001);
-
-    // Tiempo real de Madrid: niebla/nubes, lluvia que cae, gotas en el cristal y nieve.
-    const layer = (material, dz) => {
-        const mesh = noRaycast(new THREE.Mesh(new THREE.PlaneGeometry(w, h), material));
-        mesh.position.set(cx, cy, z + dz);
+/** Tiempo de Madrid tras la cristalera: lluvia que cae, gotas en el cristal y nieve. */
+function buildWeather(ctx) {
+    const { width, height, centerY, z } = GLASS;
+    const layer = (map, dz, repeat) => {
+        map.wrapS = map.wrapT = THREE.RepeatWrapping;
+        map.repeat.set(...repeat);
+        const mesh = noRaycast(
+            new THREE.Mesh(
+                new THREE.PlaneGeometry(width, height),
+                new THREE.MeshBasicMaterial({ map, transparent: true, opacity: 0, depthWrite: false, toneMapped: false }),
+            ),
+        );
+        mesh.position.set(0, centerY, z + dz);
+        ctx.scene.add(mesh);
         return mesh;
     };
-    const veil = { transparent: true, opacity: 0, depthWrite: false, toneMapped: false };
-    const haze = layer(new THREE.MeshBasicMaterial({ color: 0xb8c2d8, ...veil }), 0.003);
     const rainTex = rainTexture();
-    const rain = layer(new THREE.MeshBasicMaterial({ map: rainTex, ...veil }), 0.004);
-    const drops = layer(new THREE.MeshBasicMaterial({ map: dropletsTexture(), ...veil }), 0.005);
+    const rain = layer(rainTex, -0.05, [11, 4.5]);
+    const drops = layer(dropletsTexture(), 0, [6, 2.6]);
     const snowTex = snowTexture();
-    const snow = layer(new THREE.MeshBasicMaterial({ map: snowTex, ...veil }), 0.006);
-    win.add(dusk, day, night, haze, rain, drops, snow);
+    const snow = layer(snowTex, -0.05, [9, 4]);
 
-    const frame = std(0x090a14, { roughness: 0.5 });
-    const t = 0.07;
-    const d = 0.09;
-    addMesh(win, box(w + t * 2, t, d), frame, [cx, cy + h / 2 + t / 2, z + d / 2]);
-    addMesh(win, box(w + t * 2, t, d), frame, [cx, cy - h / 2 - t / 2, z + d / 2]);
-    addMesh(win, box(t, h, d), frame, [cx - w / 2 - t / 2, cy, z + d / 2]);
-    addMesh(win, box(t, h, d), frame, [cx + w / 2 + t / 2, cy, z + d / 2]);
-    addMesh(win, box(0.045, h, d * 0.8), frame, [cx, cy, z + d / 2]);
-    addMesh(win, box(w, 0.045, d * 0.8), frame, [cx, cy + 0.12, z + d / 2]);
-    addMesh(win, box(w + 0.3, 0.04, 0.2), std(0x1c1f36), [cx, cy - h / 2 - t - 0.02, z + 0.1]);
-
-    ctx.interactive(win, { key: 'window' });
-    // las nubes/niebla toman el color del cielo: claras de día, malva al atardecer, azul oscuro de noche
-    const hazeDusk = new THREE.Color(0x9a8aa8);
-    const hazeDay = new THREE.Color(0xd5dde8);
-    const hazeNight = new THREE.Color(0x2c3150);
-    const hazeFlash = new THREE.Color(0xffffff);
     ctx.animations.push((t, dt) => {
         const W = ctx.world;
-        day.material.opacity = W.day;
-        night.material.opacity = W.night;
         rainTex.offset.y += dt * 1.7;
-        rain.material.opacity = W.rain * 0.85;
-        drops.material.opacity = W.rain * 0.7;
+        rain.material.opacity = W.rain * 0.8;
+        drops.material.opacity = W.rain * 0.65;
         snowTex.offset.y += dt * 0.12;
         snowTex.offset.x = Math.sin(t * 0.4) * 0.05;
         snow.material.opacity = W.snow;
-        // tormenta: de vez en cuando, un relámpago que se apaga en décimas de segundo
-        if (ctx.storm && Math.random() < dt * 0.15) ctx.flash = 1;
-        ctx.flash *= Math.exp(-dt * 7);
-        haze.material.color.copy(hazeDusk).lerp(hazeDay, W.day).lerp(hazeNight, W.night).lerp(hazeFlash, ctx.flash);
-        haze.material.opacity = W.fog * 0.5 + ctx.flash * 0.55;
     });
 }
 
-function buildPegboard(ctx, backZ) {
-    const { scene, animations } = ctx;
-    const cx = 1.75;
-    const cy = 1.78;
-    const w = 1.9;
-    const h = 0.86;
-    const z = backZ + 0.015;
-
-    addMesh(scene, new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: pegboardTexture(), roughness: 0.85 }), [cx, cy, z], { shadow: false });
-
-    const glow = new THREE.MeshBasicMaterial({ color: ctx.glow(PINK, 2.6), toneMapped: false });
-    const e = 0.012;
-    addMesh(scene, box(w + e * 2, e, e * 2), glow, [cx, cy + h / 2, z + 0.006], { shadow: false });
-    addMesh(scene, box(w + e * 2, e, e * 2), glow, [cx, cy - h / 2, z + 0.006], { shadow: false });
-    addMesh(scene, box(e, h, e * 2), glow, [cx - w / 2, cy, z + 0.006], { shadow: false });
-    addMesh(scene, box(e, h, e * 2), glow, [cx + w / 2, cy, z + 0.006], { shadow: false });
-
-    // Una insignia por empleo, la más reciente a la izquierda. Clic: abre ese empleo.
-    const jobs = ctx.c.experience.items.slice(0, 5);
-    const spacing = w / (jobs.length + 0.35);
-    jobs.forEach((job, i) => {
-        const hookX = cx - w / 2 + spacing * (i + 0.85);
-        const pivot = group(scene, [hookX, cy + h / 2 - 0.1, z + 0.03]);
-        const baseZ = pivot.position.z;
-
-        addMesh(pivot, new THREE.SphereGeometry(0.014, 12, 8), std(0xcfd2e6, { metalness: 0.8, roughness: 0.3 }), [0, 0, 0], { shadow: false });
-        const accent = BADGE_ACCENTS[i % BADGE_ACCENTS.length];
-        addMesh(pivot, box(0.022, 0.24, 0.004), std(new THREE.Color(accent)), [0, -0.12, 0], { shadow: false });
-        const card = addMesh(
-            pivot,
-            new THREE.PlaneGeometry(0.27, 0.36),
-            new THREE.MeshStandardMaterial({
-                map: badgeTexture({ company: job.company, role: job.title, period: job.period, accent, current: job.isCurrent && ctx.t.scene.currentBadge }),
-                roughness: 0.6,
-                side: THREE.DoubleSide,
-            }),
-            [0, -0.43, 0.004],
-        );
-
-        const item = ctx.interactive(pivot, {
-            key: 'insignias',
-            id: `badge-${job.line}`,
-            label: job.company,
-            hint: ctx.t.scene.badgeHint(job.period),
-            section: 'experience',
-            focus: job.line,
-        });
-
-        const phase = i * 1.3;
-        animations.push((t) => {
-            const hover = item.hover();
-            pivot.rotation.z = Math.sin(t * (0.9 + hover * 2.5) + phase) * (0.035 + hover * 0.05);
-            pivot.position.z = baseZ + hover * 0.05;
-            card.scale.setScalar(1 + hover * 0.08);
-        });
-    });
-
-    [
-        [0.78, 0.2, 0xffd29a],
-        [0.78, -0.02, 0x7fd6ff],
-        [0.62, 0.05, 0xff9ebd],
-    ].forEach(([dx, dy, color]) => {
-        addMesh(scene, new THREE.TorusGeometry(0.03, 0.006, 8, 20), std(color, { metalness: 0.4 }), [cx + dx - 0.06, cy + dy, z + 0.03], { shadow: false });
-    });
-
-    const light = new THREE.PointLight(PINK, 2.2, 3.2, 2);
-    light.position.set(cx, cy, z + 0.9);
-    scene.add(light);
-}
-
-function buildDesk(ctx) {
+function buildDeskItems(ctx) {
     const { scene } = ctx;
-    const wood = std(0x1b1d33, { roughness: 0.45 });
-    const dark = std(0x0e0f1e, { roughness: 0.6 });
-
-    addMesh(scene, box(2.5, 0.06, 1.05), std(0x20233d, { roughness: 0.35, metalness: 0.15 }), [-0.5, 0.76, DESK_Z]);
-    addMesh(scene, box(2.4, 0.6, 0.03), wood, [-0.5, 0.45, DESK_Z + 0.5]);
-    addMesh(scene, box(0.5, 0.7, 0.92), wood, [0.45, 0.4, DESK_Z]);
-    addMesh(scene, box(0.04, 0.72, 0.92), dark, [-1.65, 0.38, DESK_Z]);
-    addMesh(scene, box(0.16, 0.015, 0.012), std(0xcfd2e6, { metalness: 0.8, roughness: 0.3 }), [0.45, 0.62, DESK_Z + 0.47], { shadow: false });
-    addMesh(scene, box(2.5, 0.012, 0.012), new THREE.MeshBasicMaterial({ color: ctx.glow(WARM, 2.2), toneMapped: false }), [-0.5, 0.752, DESK_Z + 0.527], { shadow: false });
-    addMesh(scene, box(0.8, 0.004, 0.3), std(0x12142a), [-0.5, 0.793, DESK_Z + 0.22]);
-    const mouse = addMesh(scene, new THREE.SphereGeometry(0.03, 16, 12), std(0xf4f2f8, { roughness: 0.4 }), [-0.17, 0.81, DESK_Z + 0.22]);
+    const top = DESK.top;
+    addMesh(scene, box(0.8, 0.004, 0.3), std(0x12142a), [0.05, top + 0.002, -0.9]);
+    const mouse = addMesh(scene, new THREE.SphereGeometry(0.03, 16, 12), std(0xf4f2f8, { roughness: 0.4 }), [0.33, top + 0.016, -0.9]);
     mouse.scale.set(0.9, 0.5, 1.4);
-    addMesh(scene, box(0.075, 0.008, 0.155), std(0x07080f, { roughness: 0.25, metalness: 0.4 }), [0.32, 0.795, DESK_Z + 0.26], { rot: [0, 0.5, 0] });
-    addMesh(scene, box(0.2, 0.014, 0.28), std(0xffd29a, { roughness: 0.8 }), [-1.35, 0.797, DESK_Z + 0.2], { rot: [0, -0.3, 0] });
+    addMesh(scene, box(0.075, 0.008, 0.155), std(0x07080f, { roughness: 0.25, metalness: 0.4 }), [0.84, top + 0.004, -0.8], { rot: [0, 0.5, 0] });
+    addMesh(scene, box(0.2, 0.014, 0.28), std(0xffd29a, { roughness: 0.8 }), [-0.62, top + 0.007, -0.86], { rot: [0, -0.3, 0] });
 
-    const screen = buildMonitor(ctx);
-    buildKeyboard(ctx, screen);
-    buildMug(ctx);
-    buildLamp(ctx, -1.5, DESK_Z - 0.15);
-    buildAstronaut(ctx, 0.75, 0.79, DESK_Z - 0.1);
-    // La silla queda a un lado para no tapar el monitor desde la cámara.
-    buildChair(ctx, -1.75, -1.95, 1.0);
+    const screen = buildMonitor(ctx, [0, top, -1.25]);
+    buildKeyboard(ctx, screen, [0, top + 0.015, -0.9]);
+    buildMug(ctx, [0.6, top, -0.85]);
+    buildLamp(ctx, [-1.02, top, -1.2]);
+    buildAstronaut(ctx, [1.05, top, -1.1]);
 }
 
 /** Monitor con terminal animado. Clic: Proyectos. */
-function buildMonitor(ctx) {
-    const mx = -0.5;
-    const mz = DESK_Z - 0.15;
+function buildMonitor(ctx, [mx, top, mz]) {
+    const my = top + 0.44;
     const dark = std(0x0e0f1e, { roughness: 0.6 });
     const monitor = group(ctx.scene);
-    addMesh(monitor, box(1.08, 0.64, 0.04), dark, [mx, 1.2, mz]);
+    addMesh(monitor, box(1.08, 0.64, 0.04), dark, [mx, my, mz]);
     const screen = createScreen(ctx.t.scene.screen);
     const panel = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 0.56), new THREE.MeshBasicMaterial({ map: screen.texture, color: ctx.glow(0xffffff, 1.15), toneMapped: false }));
-    panel.position.set(mx, 1.2, mz + 0.0215);
+    panel.position.set(mx, my, mz + 0.0215);
     monitor.add(panel);
-    addMesh(monitor, box(0.06, 0.34, 0.03), dark, [mx, 0.95, mz - 0.01]);
-    addMesh(monitor, box(0.34, 0.012, 0.22), dark, [mx, 0.796, mz + 0.04]);
+    addMesh(monitor, box(0.06, 0.2, 0.03), dark, [mx, top + 0.12, mz - 0.01]);
+    addMesh(monitor, box(0.34, 0.012, 0.22), dark, [mx, top + 0.006, mz + 0.04]);
 
     const item = ctx.interactive(monitor, { key: 'monitor', section: 'projects' });
 
     const glow = new THREE.PointLight(0xa0b4ff, 3.5, 2.6, 2);
-    glow.position.set(mx, 1.2, mz + 0.5);
+    glow.position.set(mx, my, mz + 0.5);
     ctx.scene.add(glow);
     ctx.animations.push((t, dt) => {
         screen.update(dt);
@@ -396,13 +378,13 @@ function buildMonitor(ctx) {
 }
 
 /** Teclado. Clic: las teclas se hunden y el monitor teclea un saludo. */
-function buildKeyboard(ctx, screen) {
+function buildKeyboard(ctx, screen, position) {
     const keyMat = () => std(0xd9d6e2);
     const kb = addMesh(
         ctx.scene,
         box(0.44, 0.02, 0.15),
         [keyMat(), keyMat(), new THREE.MeshStandardMaterial({ map: keyboardTexture(), roughness: 0.5 }), keyMat(), keyMat(), keyMat()],
-        [-0.55, 0.805, DESK_Z + 0.22],
+        position,
     );
     kb.rotation.x = 0.04;
     const baseY = kb.position.y;
@@ -421,10 +403,10 @@ function buildKeyboard(ctx, screen) {
 }
 
 /** Taza. Clic: vapor y un pequeño "sorbo". */
-function buildMug(ctx) {
+function buildMug(ctx, position) {
     const { scene } = ctx;
-    const pos = new THREE.Vector3(0.18, 0.79, DESK_Z + 0.12);
-    const mug = group(scene, pos.toArray());
+    const pos = new THREE.Vector3(...position);
+    const mug = group(scene, position);
     addMesh(mug, new THREE.CylinderGeometry(0.04, 0.036, 0.09, 20), std(PINK, { roughness: 0.35 }), [0, 0.045, 0]);
     addMesh(mug, new THREE.TorusGeometry(0.024, 0.007, 8, 16, Math.PI), std(PINK), [0.046, 0.045, 0], { rot: [0, 0, -Math.PI / 2] });
     addMesh(mug, new THREE.CylinderGeometry(0.035, 0.035, 0.002, 20), std(0x2a1a14, { roughness: 0.2 }), [0, 0.082, 0], { shadow: false });
@@ -474,11 +456,11 @@ function buildMug(ctx) {
     });
 }
 
-/** Flexo. Clic: enciende / apaga (luz puntual + foco sobre la mesa). */
-function buildLamp(ctx, x, z) {
+/** Flexo. Clic: enciende / apaga (luz puntual + foco sobre la mesa + lámpara del techo). */
+function buildLamp(ctx, [x, top, z]) {
     const { scene } = ctx;
     const metal = std(0x0e0f1e, { metalness: 0.5, roughness: 0.4 });
-    const lamp = group(scene, [x, 0.79, z]);
+    const lamp = group(scene, [x, top, z]);
     addMesh(lamp, new THREE.CylinderGeometry(0.08, 0.09, 0.02, 24), metal, [0, 0.01, 0]);
     addMesh(lamp, new THREE.CylinderGeometry(0.008, 0.008, 0.38, 8), metal, [0.03, 0.2, 0], { rot: [0, 0, -0.18] });
     addMesh(lamp, new THREE.SphereGeometry(0.018, 12, 8), metal, [0.07, 0.385, 0]);
@@ -496,10 +478,10 @@ function buildLamp(ctx, x, z) {
     lamp.add(bulb);
 
     const light = new THREE.PointLight(0xff9cc2, 3, 3, 2);
-    light.position.set(x + 0.3, 1.18, z + 0.1);
+    light.position.set(x + 0.3, top + 0.39, z + 0.1);
     const pool = new THREE.SpotLight(0xffc4d6, 5, 2.4, 0.75, 0.7, 2);
-    pool.position.set(x + 0.3, 1.17, z);
-    pool.target.position.set(x + 0.55, 0.76, z + 0.3);
+    pool.position.set(x + 0.3, top + 0.38, z);
+    pool.target.position.set(x + 0.55, top, z + 0.3);
     scene.add(light, pool, pool.target);
 
     ctx.interactive(lamp, { key: 'lamp' });
@@ -510,12 +492,12 @@ function buildLamp(ctx, x, z) {
         const k = ctx.world.lamp;
         light.intensity = 3 * k;
         pool.intensity = 5 * k;
-        bulb.material.color.copy(off).lerp(on, k).multiplyScalar(1 + (ctx.hdr ? 1.4 : 0) * k);
+        bulb.material.color.copy(off).lerp(on, k).multiplyScalar(1 + (ctx.hdr ? 0.7 : 0) * k);
     });
 }
 
 /** Figura de astronauta. Clic: salto con pirueta. */
-function buildAstronaut(ctx, x, y, z) {
+function buildAstronaut(ctx, [x, y, z]) {
     const suit = std(0xf4f2f8, { roughness: 0.5 });
     const g = group(ctx.scene, [x, y, z]);
     g.scale.setScalar(1.9);
@@ -554,119 +536,151 @@ function buildAstronaut(ctx, x, y, z) {
     });
 }
 
-/** Silla de oficina. Clic: gira con inercia. */
-function buildChair(ctx, x, z, rotationY) {
-    const fabric = std(0x2b2e52, { roughness: 0.85 });
-    const metal = std(0x0b0c18, { metalness: 0.6, roughness: 0.35 });
-    const chair = group(ctx.scene, [x, 0, z]);
-    chair.rotation.y = rotationY;
-    // la parte de arriba gira sobre la base, como una silla de verdad
-    const top = group(chair);
-
-    addMesh(top, box(0.52, 0.07, 0.5), fabric, [0, 0.5, 0]);
-    const back = addMesh(top, box(0.5, 0.58, 0.07), fabric, [0, 0.86, 0.26], { rot: [-0.12, 0, 0] });
-    addMesh(back, box(0.3, 0.04, 0.075), std(PINK, { roughness: 0.5 }), [0, 0.2, 0], { shadow: false });
-    addMesh(top, box(0.04, 0.2, 0.3), metal, [-0.3, 0.64, 0.02]);
-    addMesh(top, box(0.04, 0.2, 0.3), metal, [0.3, 0.64, 0.02]);
-    addMesh(chair, new THREE.CylinderGeometry(0.03, 0.03, 0.34, 12), metal, [0, 0.29, 0]);
-    for (let i = 0; i < 5; i++) {
-        const a = (i / 5) * Math.PI * 2;
-        addMesh(chair, box(0.36, 0.03, 0.045), metal, [Math.cos(a) * 0.18, 0.09, Math.sin(a) * 0.18], { rot: [0, -a, 0] });
-        addMesh(chair, new THREE.SphereGeometry(0.03, 10, 8), metal, [Math.cos(a) * 0.35, 0.04, Math.sin(a) * 0.35]);
-    }
-
-    let velocity = 0;
-    ctx.interactive(chair, {
-        key: 'chair',
-        onClick: () => {
-            velocity += 9;
-        },
-    });
-    ctx.animations.push((t, dt) => {
-        top.rotation.y += velocity * dt;
-        velocity *= Math.exp(-dt * 1.4);
-    });
+/**
+ * Muro de la derecha: panel perforado con neón e insignias (Experiencia), una
+ * balda de libros debajo (Sobre mí) y el reloj con la hora de Madrid. Todo se
+ * construye en coordenadas locales del muro (x a lo largo, z hacia la sala).
+ */
+function buildFeatureWall(ctx) {
+    const wall = group(ctx.scene, [WALL_RIGHT, 0, 1.0], -Math.PI / 2);
+    buildPegboard(ctx, group(wall, [0, 2.0, 0]));
+    buildShelf(ctx, group(wall, [0, 1.12, 0]));
+    buildClock(ctx, group(wall, [1.6, 2.0, 0.02]));
 }
 
-/** Baldas con libros. Clic: Sobre mí. Al pasar el cursor los libros se asoman. */
-function buildShelves(ctx) {
-    const wood = std(0x1b1d33, { roughness: 0.5 });
-    const rand = rng(5);
-    const x = -ROOM.halfWidth + 0.14;
-    const palette = [0xff9ebd, 0x7fd6ff, 0xffd29a, 0xb79cff, 0x4ade80, 0xe5e2ee, 0x3b4170];
-    const shelves = group(ctx.scene);
-    const books = [];
+function buildPegboard(ctx, board) {
+    const w = 1.9;
+    const h = 0.86;
+    addMesh(board, new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: pegboardTexture(), roughness: 0.85 }), [0, 0, 0.01], { shadow: false });
 
-    [1.28, 1.9].forEach((y, si) => {
-        addMesh(shelves, box(0.28, 0.035, 1.5), wood, [x, y, -2.45]);
-        let z = -3.12;
-        while (z < -1.85) {
-            const bw = 0.035 + rand() * 0.035;
-            const bh = 0.2 + rand() * 0.13;
-            const leaning = rand() < 0.12;
-            const color = palette[Math.floor(rand() * palette.length)];
-            const book = addMesh(shelves, box(0.2, bh, bw), std(color, { roughness: 0.75 }), [x, y + 0.018 + bh / 2, z + bw / 2], {
-                rot: leaning ? [0.25, 0, 0] : undefined,
-            });
-            books.push({ mesh: book, baseX: book.position.x, phase: rand() * Math.PI * 2 });
-            z += bw + 0.004;
-            if (si === 1 && z > -2.2) break;
-        }
+    const glow = new THREE.MeshBasicMaterial({ color: ctx.glow(PINK, 2.6), toneMapped: false });
+    const e = 0.012;
+    addMesh(board, box(w + e * 2, e, e * 2), glow, [0, h / 2, 0.016], { shadow: false });
+    addMesh(board, box(w + e * 2, e, e * 2), glow, [0, -h / 2, 0.016], { shadow: false });
+    addMesh(board, box(e, h, e * 2), glow, [-w / 2, 0, 0.016], { shadow: false });
+    addMesh(board, box(e, h, e * 2), glow, [w / 2, 0, 0.016], { shadow: false });
+
+    // Una insignia por empleo, la más reciente a la izquierda. Clic: abre ese empleo.
+    const jobs = ctx.c.experience.items.slice(0, 5);
+    const spacing = w / (jobs.length + 0.35);
+    jobs.forEach((job, i) => {
+        const pivot = group(board, [-w / 2 + spacing * (i + 0.85), h / 2 - 0.1, 0.04]);
+        const baseZ = pivot.position.z;
+
+        addMesh(pivot, new THREE.SphereGeometry(0.014, 12, 8), std(0xcfd2e6, { metalness: 0.8, roughness: 0.3 }), [0, 0, 0], { shadow: false });
+        const accent = BADGE_ACCENTS[i % BADGE_ACCENTS.length];
+        addMesh(pivot, box(0.022, 0.24, 0.004), std(new THREE.Color(accent)), [0, -0.12, 0], { shadow: false });
+        const card = addMesh(
+            pivot,
+            new THREE.PlaneGeometry(0.27, 0.36),
+            new THREE.MeshStandardMaterial({
+                map: badgeTexture({ company: job.company, role: job.title, period: job.period, accent, current: job.isCurrent && ctx.t.scene.currentBadge }),
+                roughness: 0.6,
+                side: THREE.DoubleSide,
+            }),
+            [0, -0.43, 0.004],
+        );
+
+        const item = ctx.interactive(pivot, {
+            key: 'insignias',
+            id: `badge-${job.line}`,
+            label: job.company,
+            hint: ctx.t.scene.badgeHint(job.period),
+            section: 'experience',
+            focus: job.line,
+        });
+
+        const phase = i * 1.3;
+        ctx.animations.push((t) => {
+            const hover = item.hover();
+            pivot.rotation.z = Math.sin(t * (0.9 + hover * 2.5) + phase) * (0.035 + hover * 0.05);
+            pivot.position.z = baseZ + hover * 0.05;
+            card.scale.setScalar(1 + hover * 0.08);
+        });
     });
-    addMesh(shelves, new THREE.CylinderGeometry(0.05, 0.04, 0.08, 14), std(0xe5e2ee), [x, 1.96, -1.95]);
+
+    const light = new THREE.PointLight(PINK, 2.2, 3.2, 2);
+    light.position.set(0, 0, 0.9);
+    board.add(light);
+}
+
+/** Balda con libros bajo el panel. Clic: Sobre mí. Al pasar el cursor los libros se asoman. */
+function buildShelf(ctx, shelf) {
+    const rand = rng(5);
+    const palette = [0xff9ebd, 0x7fd6ff, 0xffd29a, 0xb79cff, 0x4ade80, 0xe5e2ee, 0x3b4170];
+    const width = 1.7;
+    const books = [];
+    addMesh(shelf, box(width, 0.035, 0.26), std(0x16171f, { roughness: 0.5 }), [0, 0, 0.13]);
+    let x = -width / 2 + 0.06;
+    while (x < width / 2 - 0.25) {
+        const bw = 0.035 + rand() * 0.035;
+        const bh = 0.2 + rand() * 0.13;
+        const color = palette[Math.floor(rand() * palette.length)];
+        const book = addMesh(shelf, box(bw, bh, 0.2), std(color, { roughness: 0.75 }), [x + bw / 2, 0.018 + bh / 2, 0.12], {
+            rot: rand() < 0.1 ? [0, 0, 0.18] : undefined,
+        });
+        books.push({ mesh: book, baseZ: book.position.z, phase: rand() * Math.PI * 2 });
+        x += bw + 0.004;
+    }
+    // una planta pequeña al final de la balda
+    addMesh(shelf, new THREE.CylinderGeometry(0.05, 0.04, 0.08, 14), std(0xe5e2ee), [width / 2 - 0.12, 0.058, 0.13]);
     for (let i = 0; i < 6; i++) {
-        const leaf = addMesh(shelves, new THREE.SphereGeometry(0.035, 10, 8), std(0x4ade80, { roughness: 0.6 }), [
-            x + (rand() - 0.5) * 0.07,
-            2.06 + rand() * 0.07,
-            -1.95 + (rand() - 0.5) * 0.07,
+        const leaf = addMesh(shelf, new THREE.SphereGeometry(0.035, 10, 8), std(0x4ade80, { roughness: 0.6 }), [
+            width / 2 - 0.12 + (rand() - 0.5) * 0.07,
+            0.16 + rand() * 0.07,
+            0.13 + (rand() - 0.5) * 0.07,
         ]);
         leaf.scale.set(0.7, 1.7, 0.7);
     }
 
-    const item = ctx.interactive(shelves, { key: 'books', section: 'about' });
+    const item = ctx.interactive(shelf, { key: 'books', section: 'about' });
     ctx.animations.push((t) => {
         const hover = item.hover();
         if (hover === 0) return;
         books.forEach((b) => {
-            b.mesh.position.x = b.baseX + hover * (0.02 + Math.max(0, Math.sin(t * 3 + b.phase)) * 0.03);
+            b.mesh.position.z = b.baseZ + hover * (0.02 + Math.max(0, Math.sin(t * 3 + b.phase)) * 0.03);
         });
     });
 }
 
-function buildDecor({ scene }, backZ) {
-    const poster = (x, y, w, h) => {
-        addMesh(scene, box(w + 0.05, h + 0.05, 0.03), std(0x090a14), [x, y, backZ + 0.02], { shadow: false });
-        addMesh(scene, new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: posterTexture(), roughness: 0.6 }), [x, y, backZ + 0.04], {
-            shadow: false,
-        });
-    };
-    poster(-2.3, 1.95, 0.6, 0.8);
-    poster(-1.55, 1.75, 0.34, 0.46);
-    addMesh(scene, box(1.15, 0.7, 0.42), std(0x14162b, { roughness: 0.55 }), [2.0, 0.35, backZ + 0.25]);
+/** Reloj de pared con la hora real de Madrid. */
+function buildClock(ctx, g) {
+    const clock = createClock(ctx.t.scene.clock);
+    addMesh(g, new THREE.CylinderGeometry(0.2, 0.2, 0.04, 40), std(0x0c0d1b, { metalness: 0.4, roughness: 0.4 }), [0, 0, 0], {
+        rot: [Math.PI / 2, 0, 0],
+    });
+    addMesh(
+        g,
+        new THREE.CircleGeometry(0.175, 48),
+        new THREE.MeshStandardMaterial({ map: clock.texture, roughness: 0.5, emissive: 0xffffff, emissiveMap: clock.texture, emissiveIntensity: 0.18 }),
+        [0, 0, 0.021],
+        { shadow: false },
+    );
+    ctx.interactive(g, { key: 'clock' });
+    ctx.animations.push(() => clock.update());
 }
 
 /**
- * Altavoces. Clic: música generativa. Se pintan primero con geometría simple y,
- * cuando termina de cargar el modelo .glb (MODELS.speaker), se sustituyen por él:
- * las piezas simples quedan invisibles pero siguen sirviendo de zona de clic,
- * que es mucho más barato que hacer raycast contra miles de triángulos.
+ * Altavoces sobre la mesa, a ambos lados del monitor. Clic: música generativa.
+ * Se pintan primero con geometría simple y, cuando termina de cargar el modelo
+ * .glb (MODELS.speaker), se sustituyen por él: las piezas simples quedan
+ * invisibles pero siguen sirviendo de zona de clic (mucho más barato que el
+ * raycast contra miles de triángulos).
  */
-function buildSpeakers(ctx, backZ) {
+function buildSpeakers(ctx) {
     const speakers = group(ctx.scene);
     const units = [];
     [
-        { x: 1.65, toeIn: 0.22 },
-        { x: 2.35, toeIn: -0.22 },
+        { x: -0.8, toeIn: 0.3 },
+        { x: 0.8, toeIn: -0.3 },
     ].forEach(({ x, toeIn }) => {
-        const spk = group(speakers, [x, 0.7, backZ + 0.25]);
-        spk.rotation.y = toeIn; // girados hacia el centro, como monitores de estudio
-        addMesh(spk, box(0.22, 0.34, 0.2), std(0x0c0d1b, { roughness: 0.6 }), [0, 0.17, 0]);
-        const woofer = group(spk, [0, 0.11, 0.1]);
-        addMesh(woofer, new THREE.TorusGeometry(0.06, 0.012, 8, 24), std(0xcfd2e6, { metalness: 0.7, roughness: 0.3 }), [0, 0, 0]);
-        addMesh(woofer, new THREE.CircleGeometry(0.05, 20), std(0x1b1d33), [0, 0, 0.002], { shadow: false });
-        addMesh(spk, new THREE.TorusGeometry(0.025, 0.008, 8, 18), std(0xcfd2e6, { metalness: 0.7, roughness: 0.3 }), [0, 0.26, 0.1]);
-        const led = new THREE.Mesh(new THREE.CircleGeometry(0.008, 12), new THREE.MeshBasicMaterial({ color: 0x2a2d40, toneMapped: false }));
-        led.position.set(0.08, 0.31, 0.101);
+        const spk = group(speakers, [x, DESK.top, -1.22], toeIn); // girados hacia el centro, como monitores de estudio
+        addMesh(spk, box(0.16, 0.26, 0.15), std(0x0c0d1b, { roughness: 0.6 }), [0, 0.13, 0]);
+        const woofer = group(spk, [0, 0.085, 0.076]);
+        addMesh(woofer, new THREE.TorusGeometry(0.045, 0.009, 8, 24), std(0xcfd2e6, { metalness: 0.7, roughness: 0.3 }), [0, 0, 0]);
+        addMesh(woofer, new THREE.CircleGeometry(0.038, 20), std(0x1b1d33), [0, 0, 0.002], { shadow: false });
+        const led = new THREE.Mesh(new THREE.CircleGeometry(0.006, 12), new THREE.MeshBasicMaterial({ color: 0x2a2d40, toneMapped: false }));
+        led.position.set(0.055, 0.235, 0.077);
         led.userData.noTint = true;
         spk.add(led);
         units.push({ spk, woofer, led, model: null, glow: [] });
@@ -677,15 +691,7 @@ function buildSpeakers(ctx, backZ) {
     loadModel(MODELS.speaker.url)
         .then((model) => {
             if (ctx.disposed) return;
-            // normalizar: altura fija, apoyado en el suelo del mueble y centrado
-            const bounds = new THREE.Box3().setFromObject(model);
-            const size = bounds.getSize(new THREE.Vector3());
-            const center = bounds.getCenter(new THREE.Vector3());
-            const scale = MODELS.speaker.height / size.y;
-            model.scale.setScalar(scale);
-            model.position.set(-center.x * scale, -bounds.min.y * scale, -center.z * scale);
-            const template = new THREE.Group();
-            template.add(model);
+            const template = fitModel(model, MODELS.speaker.height);
 
             units.forEach((unit) => {
                 // lo simple deja de verse (y de proyectar sombra) pero sigue recibiendo los clics
@@ -733,113 +739,23 @@ function buildSpeakers(ctx, backZ) {
     });
 }
 
-/** Planta grande. Clic: las hojas se agitan. */
-function buildPlant(ctx, backZ) {
-    const rand = rng(9);
-    const plant = group(ctx.scene);
-    addMesh(plant, new THREE.CylinderGeometry(0.2, 0.15, 0.36, 20), std(0xe5e2ee, { roughness: 0.6 }), [2.95, 0.18, backZ + 0.45]);
-    const leaves = [];
-    for (let i = 0; i < 9; i++) {
-        const a = rand() * Math.PI * 2;
-        const leaf = addMesh(
-            plant,
-            new THREE.SphereGeometry(0.1, 12, 10),
-            std(new THREE.Color().setHSL(0.36 + rand() * 0.04, 0.55, 0.22 + rand() * 0.08), { roughness: 0.6 }),
-            [2.95 + Math.cos(a) * 0.15, 0.7 + rand() * 0.5, backZ + 0.45 + Math.sin(a) * 0.15],
-            { rot: [Math.cos(a) * 0.5, 0, Math.sin(a) * 0.5] },
-        );
-        leaf.scale.set(0.45, 2.6 + rand() * 1.2, 0.18);
-        leaves.push({ leaf, x: leaf.rotation.x, z: leaf.rotation.z, i });
-    }
-
-    let rustle = 0;
-    ctx.interactive(plant, {
-        key: 'plant',
-        onClick: () => {
-            rustle = 1;
-        },
-    });
-    ctx.animations.push((t, dt) => {
-        rustle *= Math.exp(-dt * 1.6);
-        leaves.forEach(({ leaf, x, z, i }) => {
-            const idle = Math.sin(t * 0.8 + i) * 0.02;
-            leaf.rotation.x = x + idle + Math.sin(t * 13 + i * 1.7) * 0.14 * rustle;
-            leaf.rotation.z = z + idle + Math.cos(t * 11 + i * 2.3) * 0.14 * rustle;
-        });
-    });
-}
-
-/** Guirnalda en la pared izquierda: cada bombilla titila a su ritmo. */
-function buildStringLights(ctx) {
-    const { scene } = ctx;
-    const points = [];
-    const count = 22;
-    for (let i = 0; i <= count; i++) {
-        const t = i / count;
-        const z = THREE.MathUtils.lerp(-3.3, 1.2, t);
-        // festones: una caída general y cuatro arcos pequeños
-        const y = 2.55 - 0.12 * Math.sin(t * Math.PI) - Math.abs(Math.sin(t * Math.PI * 4)) * 0.08;
-        points.push(new THREE.Vector3(-ROOM.halfWidth + 0.03, y, z));
-    }
-    scene.add(noRaycast(new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), new THREE.LineBasicMaterial({ color: 0x05060d }))));
-
-    const bulbs = [];
-    points.forEach((p, i) => {
-        if (i % 2) return;
-        const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.02, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffe3b0, toneMapped: false }));
-        bulb.position.copy(p).add(new THREE.Vector3(0.02, -0.03, 0));
-        scene.add(bulb);
-        bulbs.push(bulb);
-    });
-    const warm = new THREE.PointLight(0xffc98a, 5, 4.5, 2);
-    warm.position.set(-2.8, 2.35, -1.5);
-    scene.add(warm);
-
-    ctx.animations.push((t) => {
-        bulbs.forEach((b, i) => {
-            const f = 0.72 + 0.28 * Math.sin(t * (1.3 + (i % 3) * 0.6) + i * 1.9);
-            b.material.color.setRGB(f, 0.89 * f, 0.69 * f).multiplyScalar(ctx.hdr ? 2.4 : 1);
-        });
-        warm.intensity = 5 + ctx.world.night * 2 + Math.sin(t * 1.7) * 0.3;
-    });
-}
-
-/** Reloj de pared con la hora real de Madrid (pared izquierda: hay que girarse para verlo). */
-function buildClock(ctx) {
-    const clock = createClock(ctx.t.scene.clock);
-    const g = group(ctx.scene, [-ROOM.halfWidth + 0.03, 1.95, -1.3]);
-    g.rotation.y = Math.PI / 2;
-    addMesh(g, new THREE.CylinderGeometry(0.2, 0.2, 0.04, 40), std(0x0c0d1b, { metalness: 0.4, roughness: 0.4 }), [0, 0, 0], {
-        rot: [Math.PI / 2, 0, 0],
-    });
-    addMesh(
-        g,
-        new THREE.CircleGeometry(0.175, 48),
-        new THREE.MeshStandardMaterial({ map: clock.texture, roughness: 0.5, emissive: 0xffffff, emissiveMap: clock.texture, emissiveIntensity: 0.18 }),
-        [0, 0, 0.021],
-        { shadow: false },
-    );
-    ctx.interactive(g, { key: 'clock' });
-    ctx.animations.push(() => clock.update());
-}
-
-/** Motas de polvo flotando en la luz de la ventana. */
+/** Motas de polvo flotando en la luz de la cristalera. */
 function buildDust(ctx) {
     const rand = rng(3);
     const count = ctx.lowPower ? 90 : 180;
     const base = new Float32Array(count * 3);
     const seeds = new Float32Array(count);
     for (let i = 0; i < count; i++) {
-        base[i * 3] = -1.8 + rand() * 3.0;
-        base[i * 3 + 1] = 0.3 + rand() * 2.3;
-        base[i * 3 + 2] = -3.2 + rand() * 2.6;
+        base[i * 3] = -3 + rand() * 6;
+        base[i * 3 + 1] = 0.3 + rand() * 3.2;
+        base[i * 3 + 2] = -4.6 + rand() * 5;
         seeds[i] = rand();
     }
     const positions = base.slice();
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     const mat = new THREE.PointsMaterial({
-        size: 0.016,
+        size: 0.018,
         map: roundSprite(),
         color: 0xffd6e4,
         transparent: true,
@@ -865,41 +781,38 @@ function buildDust(ctx) {
     });
 }
 
+/** Luces en tiempo real: suman sobre la luz horneada de la oficina. */
 function buildLights(ctx) {
     const { scene, world } = ctx;
-    const hemi = new THREE.HemisphereLight(0x5f6cc0, 0x15132a, 0.95);
+    const hemi = new THREE.HemisphereLight(0x9aa6d8, 0x1a1626, 0.55);
     scene.add(hemi);
 
-    const key = new THREE.SpotLight(0xb8c4ff, 42, 14, 0.9, 0.85, 2);
-    key.position.set(1.4, 2.9, 0.4);
-    key.target.position.set(-0.5, 0.7, -2.4);
+    // foco cenital que da sombras a nuestros objetos sobre la mesa
+    const key = new THREE.SpotLight(0xdfe6ff, 30, 16, 0.75, 0.8, 2);
+    key.position.set(-1.2, 3.9, 2.2);
+    key.target.position.set(0, 0.8, -1.0);
     key.castShadow = true;
     key.shadow.mapSize.setScalar(ctx.lowPower ? 512 : 1024);
     key.shadow.bias = -0.0004;
     key.shadow.radius = 4;
     scene.add(key, key.target);
 
-    // luz que entra por la ventana: atardecer rosado o luna azulada
-    const sky = new THREE.PointLight(0xd890a8, 5, 7, 2);
-    sky.position.set(-0.3, 1.8, -2.6);
+    // luz que entra por la cristalera: atardecer rosado, día blanco o luna azulada
+    const sky = new THREE.PointLight(0xd890a8, 8, 10, 2);
+    sky.position.set(0, 2.4, -4.2);
     scene.add(sky);
 
-    const hemiDusk = new THREE.Color(0x5f6cc0);
-    const hemiDay = new THREE.Color(0x9cb0e0);
-    const hemiNight = new THREE.Color(0x34408c);
     const skyDusk = new THREE.Color(0xd890a8);
     const skyDay = new THREE.Color(0xe8eeff);
     const skyNight = new THREE.Color(0x7f8cff);
     ctx.animations.push(() => {
         const d = world.day;
         const n = world.night;
-        hemi.color.copy(hemiDusk).lerp(hemiDay, d).lerp(hemiNight, n);
-        hemi.intensity = 0.95 + 0.4 * d - 0.4 * n - (1 - world.lamp) * 0.15;
+        hemi.intensity = 0.55 + 0.25 * d - 0.3 * n;
         sky.color.copy(skyDusk).lerp(skyDay, d).lerp(skyNight, n);
         // con lluvia o niebla entra menos luz; los relámpagos la disparan un instante
-        // de día la luz directa sube poco: más quemaría los objetos blancos cercanos (bloom)
-        sky.intensity = (5 + 2 * d - 1.8 * n) * (1 - 0.35 * world.rain - 0.25 * world.fog) + ctx.flash * 40;
-        key.intensity = 42 + 5 * d - 16 * n;
+        sky.intensity = (8 + 2 * d - 4 * n) * (1 - 0.35 * world.rain - 0.25 * world.fog) + ctx.flash * 60;
+        key.intensity = 30 + 4 * d - 12 * n;
     });
 }
 

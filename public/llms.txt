@@ -14,4 +14,6 @@ El sitio es una habitación 3D navegable. Añade `?flat` a la URL para la versi�
 
 ## Créditos
 
+- Sala 3D: «Minimalistic Modern Office» de dylanheyes (https://sketchfab.com/dylanheyes), CC BY 4.0.
+- Silla: «Office Chair» de djeustice (https://sketchfab.com/djeustice), CC BY 4.0.
 - Modelo 3D de los altavoces: «Speaker Vipe Nitro X7» de madebyvipe (https://sketchfab.com/madebyvipe), CC BY 4.0.

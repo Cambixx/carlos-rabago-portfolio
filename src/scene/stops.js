@@ -7,13 +7,16 @@
  *
  * `intro` es la pose detrás del boot: al entrar, la cámara vuela de ahí al hero.
  */
+// pared de las insignias (ver buildRoom.js)
+const WALL_X = 4.35;
+
 export const STOPS = {
-    intro: { pos: [2.7, 2.55, 3.0], look: [0.4, 1.3, -2.7], fov: 64 },
-    hero: { pos: [0.7, 1.45, 0.9], look: [0.15, 1.0, -2.7], fov: 56 },
-    projects: { pos: [-0.5, 1.2, -1.35], look: [-0.5, 1.2, -3.0], fov: 50 },
-    experience: { pos: [1.15, 1.72, -1.1], look: [0.85, 1.62, -3.3], fov: 56 },
-    about: { pos: [-0.6, 1.65, -0.2], look: [0.35, 1.5, -3.2], fov: 54 },
-    contact: { pos: [0.2, 1.3, -0.6], look: [1.6, 0.95, -2.9], fov: 56 },
+    intro: { pos: [-3.2, 3.3, 4.0], look: [1.2, 1.0, -2.2], fov: 64 },
+    hero: { pos: [-2.4, 1.95, 3.3], look: [1.4, 0.72, -2.1], fov: 54 },
+    projects: { pos: [0, 1.25, 0.1], look: [0, 1.25, -1.25], fov: 50 },
+    experience: { pos: [1.7, 1.95, 1.6], look: [WALL_X, 1.85, 0.3], fov: 56 },
+    about: { pos: [0.4, 1.85, -2.7], look: [-3.0, 1.7, -5.0], fov: 56 },
+    contact: { pos: [0.0, 1.35, 0.4], look: [2.8, 0.95, -1.6], fov: 56 },
 };
 
 /** Cuánto se puede girar la vista arrastrando en la habitación (radianes). */

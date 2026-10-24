@@ -87,8 +87,15 @@ el envío falla a propósito y ofrece el email directo.
 
 ## Modelos 3D externos
 
-Una pieza de la sala puede sustituirse por un modelo `.glb`/`.gltf` (por ahora, los altavoces).
-Se pintan primero con la geometría simple y el modelo los reemplaza al terminar de cargar.
+La sala es el modelo **Minimalistic Modern Office** (`public/models/office.glb`): se descarga
+mientras corre el boot y, si fallara, se muestra la versión plana. Su luz va "horneada" en las
+texturas; `buildRoom.js` la tiñe y atenúa según la hora, el tiempo y la lámpara. Sobre ella se
+colocan nuestros objetos (monitor, flexo, insignias…) y se reaprovechan sus piezas: la silla
+gira, las plantas se agitan y la cristalera es la ventana del tiempo de Madrid.
+
+La silla (`chair.glb`) se carga junto a la oficina y sustituye a la suya (si no carga, se queda la
+de la oficina). Los altavoces (`speaker-1.glb`) se pintan primero con geometría simple y el
+modelo los reemplaza al terminar de cargar.
 
 1. Deja el original en `src-images/models/` (no se publica).
 2. Optimízalo (simplifica la malla, une piezas por material y comprime con meshopt):
@@ -99,11 +106,13 @@ Se pintan primero con la geometría simple y el modelo los reemplaza al terminar
      --simplify-ratio 0.04 --simplify-error 0.008 --texture-compress false
    ```
 
-   El altavoz pasó de 17,8 MB y 436.000 triángulos a 412 KB y unos 45.000.
+   El altavoz pasó de 17,8 MB y 436.000 triángulos a 412 KB y unos 45.000; la oficina, de
+   14,6 MB a 1 MB (añadiendo `--texture-compress webp --texture-size 1024`).
 3. Regístralo en `src/scene/models.js` (ruta, altura en metros, materiales que brillan) y sus
    créditos en `src/scene/credits.js`: se muestran en Contacto (CC BY obliga a citar al autor).
 
-Créditos actuales: «Speaker Vipe Nitro X7» de madebyvipe (Sketchfab), CC BY 4.0.
+Créditos actuales (Sketchfab, CC BY 4.0): «Minimalistic Modern Office» de dylanheyes,
+«Office Chair» de djeustice y «Speaker Vipe Nitro X7» de madebyvipe.
 
 ## Imágenes de proyectos
 
