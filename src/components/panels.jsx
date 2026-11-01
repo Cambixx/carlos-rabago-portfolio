@@ -17,12 +17,62 @@ function Chips({ items, highlight = [] }) {
     );
 }
 
+// Sin vídeos si el visitante pide menos movimiento o ahorro de datos: se queda la captura.
+const canPlayLoops = () =>
+    !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches && !navigator.connection?.saveData;
+
+/**
+ * Captura del proyecto. Si hay vídeo, la imagen es su primer fotograma y el bucle
+ * solo se descarga y reproduce mientras la tarjeta está a la vista.
+ */
+function ProjectShot({ project, alt }) {
+    const videoRef = useRef(null);
+    const [playing, setPlaying] = useState(false);
+    const poster = project.video ? project.video.replace(/\.mp4$/, '.webp') : project.image;
+
+    useEffect(() => {
+        const video = videoRef.current;
+        if (!video || !canPlayLoops() || !('IntersectionObserver' in window)) return undefined;
+        const observer = new IntersectionObserver(
+            ([entry]) => {
+                if (entry.isIntersecting) {
+                    if (!video.src) video.src = project.video;
+                    video.play().catch(() => {});
+                } else {
+                    video.pause();
+                }
+            },
+            { threshold: 0.35 },
+        );
+        observer.observe(video);
+        return () => observer.disconnect();
+    }, [project.video]);
+
+    return (
+        <>
+            <img src={poster} alt={alt} width="1280" height="720" loading="lazy" decoding="async" />
+            {project.video && (
+                <video
+                    ref={videoRef}
+                    className={playing ? 'is-playing' : ''}
+                    muted
+                    loop
+                    playsInline
+                    preload="none"
+                    aria-hidden="true"
+                    onPlaying={() => setPlaying(true)}
+                />
+            )}
+        </>
+    );
+}
+
 function ProjectWindow({ project }) {
     const { t } = useI18n();
     return (
         <Win title={project.title} className="win-project">
             <a className="shot" href={project.url} target="_blank" rel="noopener noreferrer" aria-label={t.panels.visitAria(project.title)}>
-                <img src={project.image} alt={t.panels.shotAlt(project.title)} width="1280" height="720" loading="lazy" decoding="async" />
+                <ProjectShot project={project} alt={t.panels.shotAlt(project.title)} />
             </a>
             <div className="project-info">
                 <div className="project-head">

@@ -22,6 +22,7 @@
             "year": "2024",
             "url": "https://doersdf.com/",
             "image": "/projects/doers.webp",
+            "video": "/projects/video/doers.mp4",
             "category": "Desarrollo Creativo",
             "categoryKey": "creative"
         },
@@ -52,6 +53,7 @@
             "year": "2024",
             "url": "https://es.greenpeace.org/",
             "image": "/projects/greenpeace.webp",
+            "video": "/projects/video/greenpeace.mp4",
             "category": "Desarrollo Creativo",
             "categoryKey": "creative"
         },
@@ -82,6 +84,7 @@
             "year": "2023",
             "url": "https://www.cervezacorona.es/",
             "image": "/projects/corona-web.webp",
+            "video": "/projects/video/corona.mp4",
             "category": "Motion Graphics",
             "categoryKey": "motion"
         },
@@ -97,6 +100,7 @@
             "year": "2023",
             "url": "https://tejiendoderechos.oxfamintermon.org/",
             "image": "/projects/oxfam.webp",
+            "video": "/projects/video/oxfam.mp4",
             "category": "UI / Diseño",
             "categoryKey": "ui"
         },
@@ -112,6 +116,7 @@
             "year": "2024",
             "url": "https://nextepfinance.com/",
             "image": "/projects/nextep.webp",
+            "video": "/projects/video/nextep.mp4",
             "category": "Full-Stack",
             "categoryKey": "fullstack"
         },
@@ -141,6 +146,7 @@
             "year": "2022",
             "url": "https://www.iconsejeros.com/",
             "image": "/projects/ica.webp",
+            "video": "/projects/video/ica.mp4",
             "category": "UI / Diseño",
             "categoryKey": "ui"
         },
@@ -156,6 +162,7 @@
             "year": "2021",
             "url": "https://misstake.es/",
             "image": "/projects/misstake.webp",
+            "video": "/projects/video/misstake.mp4",
             "category": "UI / Diseño",
             "categoryKey": "ui"
         }

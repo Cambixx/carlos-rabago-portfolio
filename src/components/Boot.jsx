@@ -3,6 +3,7 @@ import { useI18n } from '../i18n/context';
 import LangSwitch from './LangSwitch';
 
 const DURATION_MS = 3600;
+const SHORT_MS = 1200; // quien ya ha entrado otras veces no tiene que esperar el build entero
 const BLOCKS = 48;
 const CHART = { w: 560, h: 96, samples: 72 };
 
@@ -31,16 +32,22 @@ function curvePath(values, upTo) {
  * Pantalla de arranque: simula un build en terminal y, al llegar al 100 %,
  * ofrece entrar con o sin sonido. El sonido necesita un gesto del usuario, así
  * que esa elección es también el permiso para que el navegador lo reproduzca.
+ * "Saltar" lleva la animación al final (sigue esperando a que la sala esté lista).
  */
-export default function Boot({ ready, reducedMotion, onEnter }) {
+export default function Boot({ ready, reducedMotion, short, onEnter }) {
     const { t, c } = useI18n();
     const [progress, setProgress] = useState(0);
+    const [skipped, setSkipped] = useState(false);
     const startRef = useRef(null);
     const curve = useMemo(buildCurve, []);
     const steps = t.boot.steps(Math.min(5, c.experience.items.length), c.projects.items.length);
 
     useEffect(() => {
-        const duration = reducedMotion ? 500 : DURATION_MS;
+        if (skipped) {
+            setProgress(1);
+            return undefined;
+        }
+        const duration = reducedMotion ? 500 : short ? SHORT_MS : DURATION_MS;
         let raf;
         const tick = (now) => {
             startRef.current ??= now;
@@ -51,7 +58,7 @@ export default function Boot({ ready, reducedMotion, onEnter }) {
         };
         raf = requestAnimationFrame(tick);
         return () => cancelAnimationFrame(raf);
-    }, [reducedMotion]);
+    }, [reducedMotion, short, skipped]);
 
     const done = progress >= 1 && ready;
     const stepsShown = Math.min(steps.length, Math.floor(progress * (steps.length + 0.4)));
@@ -62,6 +69,15 @@ export default function Boot({ ready, reducedMotion, onEnter }) {
     return (
         <div className="boot" role="dialog" aria-label={t.boot.aria}>
             <LangSwitch className="boot-lang" />
+            {/* siempre ocupa su sitio; solo se oculta al terminar (sin saltos de diseño) */}
+            <button
+                type="button"
+                className="boot-skip"
+                onClick={() => setSkipped(true)}
+                hidden={progress >= 1}
+            >
+                {t.boot.skip} ›
+            </button>
             <div className="boot-inner">
                 <p className="boot-cmd">
                     <span className="boot-prompt">$</span> {cmdStart} <em>{cmdProject}</em> {cmdEnd}

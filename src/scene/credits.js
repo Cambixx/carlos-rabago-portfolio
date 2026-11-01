@@ -19,6 +19,14 @@ export const CREDITS = {
         license: 'CC BY 4.0',
         licenseUrl: 'https://creativecommons.org/licenses/by/4.0/',
     },
+    polyhaven: {
+        title: 'Desk Lamp Arm 01 · Potted Plant 04 · Stationery Supplies',
+        url: 'https://polyhaven.com/models',
+        author: 'Poly Haven',
+        authorUrl: 'https://polyhaven.com',
+        license: 'CC0',
+        licenseUrl: 'https://creativecommons.org/publicdomain/zero/1.0/',
+    },
     speaker: {
         title: 'Speaker Vipe Nitro X7',
         url: 'https://sketchfab.com/3d-models/speaker-vipe-nitro-x7-f8ad99da408f4211b224ef51f08cee06',

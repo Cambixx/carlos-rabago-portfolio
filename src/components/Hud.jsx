@@ -39,7 +39,7 @@ export function NavPill({ section, onSelect }) {
 }
 
 /** Menú de cuatro puntos arriba a la derecha: idioma, sonido, música, CV y versión plana. */
-export function MenuButton({ sound, onToggleSound, music, onToggleMusic, flat, canToggleFlat, onToggleFlat }) {
+export function MenuButton({ sound, onToggleSound, music, onToggleMusic, flat, canToggleFlat, onToggleFlat, canParty, party, onToggleParty, onOpenCard }) {
     const { t, c } = useI18n();
     const [open, setOpen] = useState(false);
     const ref = useRef(null);
@@ -79,6 +79,25 @@ export function MenuButton({ sound, onToggleSound, music, onToggleMusic, flat, c
                         <span>{t.hud.music}</span>
                         <b>{music ? 'ON' : 'OFF'}</b>
                     </button>
+                    {canParty && (
+                        <>
+                            <button type="button" role="menuitem" onClick={onToggleParty}>
+                                <span>{t.hud.party}</span>
+                                <b>{party ? 'ON' : 'OFF'}</b>
+                            </button>
+                            <button
+                                type="button"
+                                role="menuitem"
+                                onClick={() => {
+                                    setOpen(false);
+                                    onOpenCard();
+                                }}
+                            >
+                                <span>{t.hud.card}</span>
+                                <b>PNG</b>
+                            </button>
+                        </>
+                    )}
                     <a role="menuitem" href={c.contact.cv.url} download>
                         <span>{t.hud.cv}</span>
                         <b>PDF</b>

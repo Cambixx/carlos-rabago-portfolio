@@ -21,6 +21,10 @@ export const MODELS = {
         facing: 0, // giro (radianes) para que su frente mire como la silla original
         credit: CREDITS.chair,
     },
+    // Objetos de la mesa (Poly Haven, CC0). Opcionales: si no cargan, hay versión sencilla.
+    lamp: { url: '/models/lamp.glb', credit: CREDITS.polyhaven },
+    deskPlant: { url: '/models/desk-plant.glb', credit: CREDITS.polyhaven },
+    stationery: { url: '/models/stationery.glb', credit: CREDITS.polyhaven },
     speaker: {
         url: '/models/speaker-1.glb',
         height: 0.3, // metros: alto final, sobre la mesa

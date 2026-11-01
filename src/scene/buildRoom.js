@@ -1,11 +1,12 @@
 import * as THREE from 'three';
-import { badgeTexture, createClock, createScreen, dropletsTexture, keyboardTexture, pegboardTexture, rainTexture, rng, roundSprite, snowTexture } from './textures';
+import { badgeTexture, createClock, dropletsTexture, pegboardTexture, rainTexture, rng, roundSprite, snowTexture } from './textures';
+import { buildDesk } from './desk';
+import { PINK, addMesh, box, eachMaterial, fitModel, group, rounded, std } from './helpers';
 import { makeInteractive, noRaycast } from './interactive';
 import { MODELS, loadModel } from './models';
 import { getContent } from '../content';
 import { STRINGS } from '../i18n/strings';
 
-const PINK = 0xff9ebd;
 const BADGE_ACCENTS = ['#ff9ebd', '#7fd6ff', '#b79cff', '#ffd29a', '#4ade80'];
 
 /**
@@ -18,47 +19,16 @@ const DESK = { top: 0.81, front: -0.66, back: -1.37 };
 const GLASS = { z: -4.95, width: 8.7, height: 4.05, centerY: 2.15 };
 const WALL_RIGHT = 4.35; // pared de hormigón de la derecha (el muro de las insignias)
 
-const easeInOut = (t) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
-
-function std(color, opts = {}) {
-    return new THREE.MeshStandardMaterial({ color, roughness: 0.7, metalness: 0, ...opts });
-}
-
-function addMesh(parent, geometry, material, [x, y, z], { shadow = true, rot } = {}) {
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(x, y, z);
-    if (rot) mesh.rotation.set(...rot);
-    mesh.castShadow = shadow;
-    mesh.receiveShadow = true;
-    parent.add(mesh);
-    return mesh;
-}
-
-const box = (w, h, d) => new THREE.BoxGeometry(w, h, d);
-
-/**
- * Normaliza un modelo cargado: lo escala a `height` metros de alto, lo apoya en
- * y = 0 y lo centra en x/z. Devuelve un grupo listo para colocar y clonar.
- */
-function fitModel(model, height) {
-    const bounds = new THREE.Box3().setFromObject(model);
-    const size = bounds.getSize(new THREE.Vector3());
-    const center = bounds.getCenter(new THREE.Vector3());
-    const scale = height / size.y;
-    model.scale.multiplyScalar(scale);
-    model.position.set(-center.x * scale, -bounds.min.y * scale, -center.z * scale);
-    const fitted = new THREE.Group();
-    fitted.add(model);
-    return fitted;
-}
-
-function group(parent, [x, y, z] = [0, 0, 0], rotationY = 0) {
-    const g = new THREE.Group();
-    g.position.set(x, y, z);
-    g.rotation.y = rotationY;
-    parent.add(g);
-    return g;
-}
+/** Encendido al entrar: [pieza, inicio (s), duración (s), parpadea]. */
+const WAKE = [
+    ['room', 0.5, 1.6],
+    ['ceiling', 0.9, 0.55, true],
+    ['neon', 1.6, 0.7, true],
+    ['lamp', 2.2, 0.12],
+    ['monitor', 2.6, 0.5, true],
+];
+// patrón de parpadeo de un tubo de neón al arrancar
+const FLICKER = [0, 1, 0, 0, 1, 0.3, 0, 1, 1, 0, 1, 1];
 
 /**
  * Construye la sala sobre el modelo de oficina ya cargado. Devuelve:
@@ -70,7 +40,7 @@ function group(parent, [x, y, z] = [0, 0, 0], rotationY = 0) {
  *
  * Los objetos clicables se encuentran por raycast a través de `userData.item`.
  */
-export function buildRoom({ office, chairModel = null, lowPower = false, lang = 'es' }) {
+export function buildRoom({ office, models = {}, envMap = null, lowPower = false, lang = 'es' }) {
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x0b0d17);
 
@@ -85,11 +55,28 @@ export function buildRoom({ office, chairModel = null, lowPower = false, lang = 
         items: [],
         hotspots: [],
         // valores actuales (0..1) que se acercan suavemente a `target`
-        world: { lamp: 1, day: 0, night: 0, music: 0, rain: 0, snow: 0, fog: 0 },
-        target: { lamp: 1, day: 0, night: 0, music: 0, rain: 0, snow: 0, fog: 0 },
+        world: { lamp: 1, day: 0, night: 0, music: 0, rain: 0, snow: 0, fog: 0, party: 0 },
+        target: { lamp: 1, day: 0, night: 0, music: 0, rain: 0, snow: 0, fog: 0, party: 0 },
         musicLevel: 0,
         storm: false,
         flash: 0, // relámpago (0..1), solo con tormenta
+        daylight: 1, // 0..1: cuánta luz natural hay (para atenuar los reflejos de noche)
+        // encendido de la sala al entrar (0 = apagado, 1 = encendido); ver WAKE
+        wake: { room: 0, ceiling: 0, neon: 0, lamp: 0, monitor: 0 },
+        anchors: {}, // puntos de la escena que la interfaz sigue en pantalla (bocadillo del guía)
+        guideTalking: 0, // 0..1 mientras el guía habla (el astronauta saluda)
+        reflectors: [],
+        events: null, // callback para avisar de momentos (p. ej. sonidos del encendido)
+    };
+    ctx.emit = (name) => ctx.events?.(name);
+    /** Da reflejos del entorno a un material; se atenúan de noche. */
+    ctx.reflect = (material, intensity = 0.6) => {
+        if (envMap) {
+            material.envMap = envMap;
+            material.envMapIntensity = intensity;
+            ctx.reflectors.push({ material, intensity });
+        }
+        return material;
     };
     /** Color emisivo: en HDR se multiplica por `boost` para que supere el umbral del bloom. */
     ctx.glow = (color, boost) => new THREE.Color(color).multiplyScalar(ctx.hdr ? boost : 1);
@@ -108,12 +95,37 @@ export function buildRoom({ office, chairModel = null, lowPower = false, lang = 
         // tormenta: de vez en cuando, un relámpago que se apaga en décimas de segundo
         if (ctx.storm && Math.random() < dt * 0.15) ctx.flash = 1;
         ctx.flash *= Math.exp(-dt * 7);
+        ctx.reflectors.forEach(({ material, intensity }) => {
+            material.envMapIntensity = intensity * (0.25 + 0.75 * ctx.daylight);
+        });
     });
 
-    setupOffice(ctx, office, chairModel);
+    // Encendido al entrar: cada pieza se enciende a su momento (algunas parpadean como un neón).
+    let wakeStart = null;
+    let lastTime = 0;
+    const fired = new Set();
+    ctx.animations.push((t) => {
+        lastTime = t;
+        if (wakeStart === null) return;
+        const elapsed = t - wakeStart;
+        WAKE.forEach(([key, start, duration, flicker]) => {
+            const p = Math.min(1, Math.max(0, (elapsed - start) / duration));
+            ctx.wake[key] = flicker && p > 0 && p < 1 ? FLICKER[Math.floor(p * FLICKER.length)] * p : p;
+            if (p > 0 && !fired.has(key)) {
+                fired.add(key);
+                ctx.emit(`wake:${key}`);
+            }
+        });
+    });
+    const wake = ({ instant = false } = {}) => {
+        if (instant) Object.keys(ctx.wake).forEach((key) => (ctx.wake[key] = 1));
+        else wakeStart ??= lastTime;
+    };
+
+    setupOffice(ctx, office, models.chair ?? null);
     buildWeather(ctx);
-    buildDeskItems(ctx);
-    buildFeatureWall(ctx);
+    buildDesk(ctx, { top: DESK.top, back: DESK.back, models });
+    buildFeatureWall(ctx, models);
     buildSpeakers(ctx);
     buildDust(ctx);
     buildLights(ctx);
@@ -133,8 +145,9 @@ export function buildRoom({ office, chairModel = null, lowPower = false, lang = 
         ctx.hotspots.forEach((h) => h.tick(dt));
     };
 
-    const apply = ({ lamp, sky, music, weather }) => {
+    const apply = ({ lamp, sky, music, weather, party }) => {
         ctx.target.lamp = lamp ? 1 : 0;
+        ctx.target.party = party ? 1 : 0;
         ctx.target.day = sky === 'day' ? 1 : 0;
         ctx.target.night = sky === 'night' ? 1 : 0;
         ctx.target.music = music ? 1 : 0;
@@ -150,7 +163,22 @@ export function buildRoom({ office, chairModel = null, lowPower = false, lang = 
         ctx.disposed = true;
     };
 
-    return { scene, hotspots: ctx.hotspots, screen: ctx.screenAnchor, update, apply, dispose };
+    return {
+        scene,
+        hotspots: ctx.hotspots,
+        screen: ctx.screenAnchor,
+        anchors: ctx.anchors,
+        update,
+        apply,
+        wake,
+        dispose,
+        set onEvent(fn) {
+            ctx.events = fn;
+        },
+        set guideTalking(value) {
+            ctx.guideTalking = value;
+        },
+    };
 }
 
 /**
@@ -188,10 +216,10 @@ function setupOffice(ctx, office, chairModel) {
         chair = group(scene);
         const fitted = fitModel(chairModel, MODELS.chair.height);
         fitted.rotation.y = MODELS.chair.facing;
-        fitted.traverse((obj) => {
-            if (!obj.isMesh) return;
-            obj.castShadow = true;
-            obj.receiveShadow = true;
+        eachMaterial(fitted, (m, mesh) => {
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            ctx.reflect(m, 0.45);
         });
         chair.add(fitted);
     } else {
@@ -275,12 +303,18 @@ function setupOffice(ctx, office, chairModel) {
     const roomColor = new THREE.Color();
     const skyColor = new THREE.Color();
 
-    ctx.animations.push(() => {
+    const partyColor = new THREE.Color();
+    ctx.animations.push((t) => {
         const W = ctx.world;
         const dusk = Math.max(0, 1 - W.day - W.night);
         const daylight = W.day + dusk * 0.66 + W.night * 0.24;
-        const level = daylight * (0.8 + 0.2 * W.lamp) * (1 - 0.15 * W.fog - 0.15 * W.rain) + ctx.flash * 0.6;
+        ctx.daylight = daylight;
+        // al entrar la sala está casi a oscuras y se ilumina con el encendido (ver WAKE)
+        const level = (daylight * (0.8 + 0.2 * W.lamp) * (1 - 0.15 * W.fog - 0.15 * W.rain) + ctx.flash * 0.6) * (0.1 + 0.9 * ctx.wake.room);
         roomColor.copy(tint.dusk).lerp(tint.day, W.day).lerp(tint.night, W.night);
+        // modo fiesta: la luz de la sala recorre el arcoíris
+        partyColor.setHSL((t * 0.08) % 1, 0.7, 0.6);
+        roomColor.lerp(partyColor, W.party * 0.45);
         baked.forEach((m) => {
             m.emissive.copy(roomColor);
             m.emissiveIntensity = level;
@@ -296,7 +330,8 @@ function setupOffice(ctx, office, chairModel) {
             .lerp(white, ctx.flash * 0.8);
         sky.emissive.copy(skyColor);
 
-        ceiling.emissiveIntensity = W.lamp * (ctx.hdr ? 2.4 : 1);
+        ceiling.emissiveIntensity = W.lamp * ctx.wake.ceiling * (ctx.hdr ? 2.4 : 1) * (1 + W.party * ctx.musicLevel * 2);
+        ceiling.emissive.setRGB(1, 1, 1).lerp(partyColor, W.party);
     });
 
 }
@@ -334,217 +369,15 @@ function buildWeather(ctx) {
     });
 }
 
-function buildDeskItems(ctx) {
-    const { scene } = ctx;
-    const top = DESK.top;
-    addMesh(scene, box(0.8, 0.004, 0.3), std(0x12142a), [0.05, top + 0.002, -0.9]);
-    const mouse = addMesh(scene, new THREE.SphereGeometry(0.03, 16, 12), std(0xf4f2f8, { roughness: 0.4 }), [0.33, top + 0.016, -0.9]);
-    mouse.scale.set(0.9, 0.5, 1.4);
-    addMesh(scene, box(0.075, 0.008, 0.155), std(0x07080f, { roughness: 0.25, metalness: 0.4 }), [0.84, top + 0.004, -0.8], { rot: [0, 0.5, 0] });
-    addMesh(scene, box(0.2, 0.014, 0.28), std(0xffd29a, { roughness: 0.8 }), [-0.62, top + 0.007, -0.86], { rot: [0, -0.3, 0] });
-
-    const screen = buildMonitor(ctx, [0, top, -1.25]);
-    buildKeyboard(ctx, screen, [0, top + 0.015, -0.9]);
-    buildMug(ctx, [0.6, top, -0.85]);
-    buildLamp(ctx, [-1.02, top, -1.2]);
-    buildAstronaut(ctx, [1.05, top, -1.1]);
-}
-
-/** Monitor con terminal animado. Clic: Proyectos. */
-function buildMonitor(ctx, [mx, top, mz]) {
-    const my = top + 0.44;
-    const dark = std(0x0e0f1e, { roughness: 0.6 });
-    const monitor = group(ctx.scene);
-    addMesh(monitor, box(1.08, 0.64, 0.04), dark, [mx, my, mz]);
-    const screen = createScreen(ctx.t.scene.screen);
-    const panel = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 0.56), new THREE.MeshBasicMaterial({ map: screen.texture, color: ctx.glow(0xffffff, 1.15), toneMapped: false }));
-    panel.position.set(mx, my, mz + 0.0215);
-    monitor.add(panel);
-    addMesh(monitor, box(0.06, 0.2, 0.03), dark, [mx, top + 0.12, mz - 0.01]);
-    addMesh(monitor, box(0.34, 0.012, 0.22), dark, [mx, top + 0.006, mz + 0.04]);
-
-    const item = ctx.interactive(monitor, { key: 'monitor', section: 'projects' });
-
-    const glow = new THREE.PointLight(0xa0b4ff, 3.5, 2.6, 2);
-    glow.position.set(mx, my, mz + 0.5);
-    ctx.scene.add(glow);
-    ctx.animations.push((t, dt) => {
-        screen.update(dt);
-        glow.intensity = 3.5 + Math.sin(t * 2.3) * 0.12 + item.hover() * 2;
-    });
-    // Dónde va la pantalla HTML real (CSS3D) en la sección Proyectos.
-    ctx.screenAnchor = { center: panel.position.clone(), width: 1.0, height: 0.56 };
-    return screen;
-}
-
-/** Teclado. Clic: las teclas se hunden y el monitor teclea un saludo. */
-function buildKeyboard(ctx, screen, position) {
-    const keyMat = () => std(0xd9d6e2);
-    const kb = addMesh(
-        ctx.scene,
-        box(0.44, 0.02, 0.15),
-        [keyMat(), keyMat(), new THREE.MeshStandardMaterial({ map: keyboardTexture(), roughness: 0.5 }), keyMat(), keyMat(), keyMat()],
-        position,
-    );
-    kb.rotation.x = 0.04;
-    const baseY = kb.position.y;
-    let press = 0;
-    ctx.interactive(kb, {
-        key: 'keyboard',
-        onClick: () => {
-            press = 1;
-            screen.burst();
-        },
-    });
-    ctx.animations.push((t, dt) => {
-        press = Math.max(0, press - dt / 1.2);
-        kb.position.y = baseY - Math.abs(Math.sin(t * 38)) * 0.005 * press;
-    });
-}
-
-/** Taza. Clic: vapor y un pequeño "sorbo". */
-function buildMug(ctx, position) {
-    const { scene } = ctx;
-    const pos = new THREE.Vector3(...position);
-    const mug = group(scene, position);
-    addMesh(mug, new THREE.CylinderGeometry(0.04, 0.036, 0.09, 20), std(PINK, { roughness: 0.35 }), [0, 0.045, 0]);
-    addMesh(mug, new THREE.TorusGeometry(0.024, 0.007, 8, 16, Math.PI), std(PINK), [0.046, 0.045, 0], { rot: [0, 0, -Math.PI / 2] });
-    addMesh(mug, new THREE.CylinderGeometry(0.035, 0.035, 0.002, 20), std(0x2a1a14, { roughness: 0.2 }), [0, 0.082, 0], { shadow: false });
-
-    const puffs = Array.from({ length: 8 }, () => {
-        const m = noRaycast(
-            new THREE.Mesh(new THREE.SphereGeometry(0.016, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false })),
-        );
-        m.visible = false;
-        scene.add(m);
-        return { m, t: 1, delay: 0, dx: 0, dz: 0 };
-    });
-    let sip = 0;
-
-    ctx.interactive(mug, {
-        key: 'mug',
-        onClick: () => {
-            sip = 1;
-            puffs.forEach((p, i) => {
-                p.t = 0;
-                p.delay = i * 0.11;
-                p.dx = (Math.random() - 0.5) * 0.05;
-                p.dz = (Math.random() - 0.5) * 0.05;
-            });
-        },
-    });
-
-    ctx.animations.push((t, dt) => {
-        sip = Math.max(0, sip - dt / 0.7);
-        mug.rotation.z = Math.sin(sip * Math.PI) * 0.35;
-        mug.position.y = pos.y + Math.sin(sip * Math.PI) * 0.04;
-        puffs.forEach((p) => {
-            if (p.t >= 1) {
-                p.m.visible = false;
-                return;
-            }
-            if (p.delay > 0) {
-                p.delay -= dt;
-                return;
-            }
-            p.t = Math.min(1, p.t + dt / 1.7);
-            p.m.visible = true;
-            p.m.position.set(pos.x + p.dx * p.t + Math.sin(t * 3 + p.dz * 50) * 0.01, pos.y + 0.1 + p.t * 0.3, pos.z + p.dz * p.t);
-            p.m.scale.setScalar(0.6 + p.t * 2);
-            p.m.material.opacity = 0.32 * Math.sin(Math.PI * p.t);
-        });
-    });
-}
-
-/** Flexo. Clic: enciende / apaga (luz puntual + foco sobre la mesa + lámpara del techo). */
-function buildLamp(ctx, [x, top, z]) {
-    const { scene } = ctx;
-    const metal = std(0x0e0f1e, { metalness: 0.5, roughness: 0.4 });
-    const lamp = group(scene, [x, top, z]);
-    addMesh(lamp, new THREE.CylinderGeometry(0.08, 0.09, 0.02, 24), metal, [0, 0.01, 0]);
-    addMesh(lamp, new THREE.CylinderGeometry(0.008, 0.008, 0.38, 8), metal, [0.03, 0.2, 0], { rot: [0, 0, -0.18] });
-    addMesh(lamp, new THREE.SphereGeometry(0.018, 12, 8), metal, [0.07, 0.385, 0]);
-    addMesh(lamp, new THREE.CylinderGeometry(0.008, 0.008, 0.32, 8), metal, [0.17, 0.43, 0], { rot: [0, 0, 1.1] });
-    const shade = addMesh(
-        lamp,
-        new THREE.ConeGeometry(0.1, 0.14, 24, 1, true),
-        std(PINK, { side: THREE.DoubleSide, roughness: 0.4, emissive: PINK, emissiveIntensity: 0.25 }),
-        [0.3, 0.42, 0],
-        { rot: [0, 0, 0.35] },
-    );
-    shade.castShadow = false;
-    const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.03, 12, 8), new THREE.MeshBasicMaterial({ color: 0xfff0d8, toneMapped: false }));
-    bulb.position.set(0.3, 0.38, 0);
-    lamp.add(bulb);
-
-    const light = new THREE.PointLight(0xff9cc2, 3, 3, 2);
-    light.position.set(x + 0.3, top + 0.39, z + 0.1);
-    const pool = new THREE.SpotLight(0xffc4d6, 5, 2.4, 0.75, 0.7, 2);
-    pool.position.set(x + 0.3, top + 0.38, z);
-    pool.target.position.set(x + 0.55, top, z + 0.3);
-    scene.add(light, pool, pool.target);
-
-    ctx.interactive(lamp, { key: 'lamp' });
-
-    const on = new THREE.Color(0xfff0d8);
-    const off = new THREE.Color(0x3a3440);
-    ctx.animations.push(() => {
-        const k = ctx.world.lamp;
-        light.intensity = 3 * k;
-        pool.intensity = 5 * k;
-        bulb.material.color.copy(off).lerp(on, k).multiplyScalar(1 + (ctx.hdr ? 0.7 : 0) * k);
-    });
-}
-
-/** Figura de astronauta. Clic: salto con pirueta. */
-function buildAstronaut(ctx, [x, y, z]) {
-    const suit = std(0xf4f2f8, { roughness: 0.5 });
-    const g = group(ctx.scene, [x, y, z]);
-    g.scale.setScalar(1.9);
-    addMesh(g, box(0.06, 0.07, 0.04), suit, [0, 0.075, 0]);
-    addMesh(g, box(0.05, 0.06, 0.02), std(0xcfd2e6), [0, 0.08, -0.03]);
-    addMesh(g, new THREE.SphereGeometry(0.036, 20, 14), suit, [0, 0.14, 0]);
-    const visor = addMesh(g, new THREE.SphereGeometry(0.028, 16, 12), std(0x101428, { metalness: 0.9, roughness: 0.12 }), [0, 0.14, 0.014]);
-    visor.scale.set(1, 0.85, 0.8);
-    const armL = addMesh(g, box(0.02, 0.055, 0.025), suit, [-0.04, 0.075, 0]);
-    addMesh(g, box(0.02, 0.055, 0.025), suit, [0.04, 0.075, 0]);
-    addMesh(g, box(0.025, 0.045, 0.03), suit, [-0.017, 0.022, 0]);
-    addMesh(g, box(0.025, 0.045, 0.03), suit, [0.017, 0.022, 0]);
-    addMesh(g, box(0.02, 0.012, 0.004), new THREE.MeshBasicMaterial({ color: ctx.glow(PINK, 2), toneMapped: false }), [0, 0.09, 0.022], { shadow: false });
-
-    let jump = 1;
-    const item = ctx.interactive(g, {
-        key: 'astronaut',
-        onClick: () => {
-            if (jump >= 1) jump = 0;
-        },
-    });
-
-    ctx.animations.push((t, dt) => {
-        let lift = 0;
-        let spin = 0;
-        if (jump < 1) {
-            jump = Math.min(1, jump + dt / 0.95);
-            lift = Math.sin(Math.PI * jump) * 0.17;
-            spin = easeInOut(jump) * Math.PI * 2;
-        }
-        g.position.y = y + lift;
-        g.rotation.y = -0.3 + Math.sin(t * 0.5) * 0.12 + spin;
-        // saluda con el brazo al pasar el cursor
-        armL.rotation.z = item.hover() * (2.4 + Math.sin(t * 12) * 0.35);
-        armL.position.y = 0.075 + item.hover() * 0.03;
-    });
-}
-
 /**
  * Muro de la derecha: panel perforado con neón e insignias (Experiencia), una
  * balda de libros debajo (Sobre mí) y el reloj con la hora de Madrid. Todo se
  * construye en coordenadas locales del muro (x a lo largo, z hacia la sala).
  */
-function buildFeatureWall(ctx) {
+function buildFeatureWall(ctx, models) {
     const wall = group(ctx.scene, [WALL_RIGHT, 0, 1.0], -Math.PI / 2);
     buildPegboard(ctx, group(wall, [0, 2.0, 0]));
-    buildShelf(ctx, group(wall, [0, 1.12, 0]));
+    buildShelf(ctx, group(wall, [0, 1.12, 0]), models.deskPlant);
     buildClock(ctx, group(wall, [1.6, 2.0, 0.02]));
 }
 
@@ -602,12 +435,29 @@ function buildPegboard(ctx, board) {
     const light = new THREE.PointLight(PINK, 2.2, 3.2, 2);
     light.position.set(0, 0, 0.9);
     board.add(light);
+
+    const pink = ctx.glow(PINK, 2.6);
+    const party = new THREE.Color();
+    const partyGlow = new THREE.Color();
+    ctx.animations.push((t) => {
+        const on = ctx.wake.neon;
+        const W = ctx.world;
+        party.setHSL((t * 0.12) % 1, 0.9, 0.62);
+        // mismo brillo percibido que el rosa: el verde y el amarillo no queman la imagen
+        const lum = 0.2126 * party.r + 0.7152 * party.g + 0.0722 * party.b;
+        partyGlow.copy(party).multiplyScalar(Math.min(1.4, 0.71 / Math.max(lum, 0.05)) * (ctx.hdr ? 2.6 : 1));
+        glow.color.copy(pink).lerp(partyGlow, W.party).multiplyScalar(on);
+        light.color.setRGB(1, 0.62, 0.74).lerp(party, W.party);
+        light.intensity = 2.2 * on * (1 + W.party * ctx.musicLevel * 3);
+    });
 }
 
 /** Balda con libros bajo el panel. Clic: Sobre mí. Al pasar el cursor los libros se asoman. */
-function buildShelf(ctx, shelf) {
+function buildShelf(ctx, shelf, plantModel) {
     const rand = rng(5);
-    const palette = [0xff9ebd, 0x7fd6ff, 0xffd29a, 0xb79cff, 0x4ade80, 0xe5e2ee, 0x3b4170];
+    // tonos sobrios de oficina, con algún rosa de la marca
+    const palette = [0x2b3a55, 0x3d3f45, 0xe9e2d0, 0xb5654a, 0x7c8b6f, 0x8e7d6a, 0x23252b, 0xff9ebd];
+    const bookGeometry = rounded(1, 1, 1, 0.06, 2);
     const width = 1.7;
     const books = [];
     addMesh(shelf, box(width, 0.035, 0.26), std(0x16171f, { roughness: 0.5 }), [0, 0, 0.13]);
@@ -616,21 +466,32 @@ function buildShelf(ctx, shelf) {
         const bw = 0.035 + rand() * 0.035;
         const bh = 0.2 + rand() * 0.13;
         const color = palette[Math.floor(rand() * palette.length)];
-        const book = addMesh(shelf, box(bw, bh, 0.2), std(color, { roughness: 0.75 }), [x + bw / 2, 0.018 + bh / 2, 0.12], {
+        const book = addMesh(shelf, bookGeometry, std(color, { roughness: 0.75 }), [x + bw / 2, 0.018 + bh / 2, 0.12], {
             rot: rand() < 0.1 ? [0, 0, 0.18] : undefined,
         });
+        book.scale.set(bw, bh, 0.2);
         books.push({ mesh: book, baseZ: book.position.z, phase: rand() * Math.PI * 2 });
         x += bw + 0.004;
     }
-    // una planta pequeña al final de la balda
-    addMesh(shelf, new THREE.CylinderGeometry(0.05, 0.04, 0.08, 14), std(0xe5e2ee), [width / 2 - 0.12, 0.058, 0.13]);
-    for (let i = 0; i < 6; i++) {
-        const leaf = addMesh(shelf, new THREE.SphereGeometry(0.035, 10, 8), std(0x4ade80, { roughness: 0.6 }), [
-            width / 2 - 0.12 + (rand() - 0.5) * 0.07,
-            0.16 + rand() * 0.07,
-            0.13 + (rand() - 0.5) * 0.07,
-        ]);
-        leaf.scale.set(0.7, 1.7, 0.7);
+    // una suculenta al final de la balda (modelo de Poly Haven; si no carga, una sencilla)
+    if (plantModel) {
+        const plant = fitModel(plantModel, 0.24);
+        plant.position.set(width / 2 - 0.12, 0.018, 0.13);
+        eachMaterial(plant, (m, mesh) => {
+            mesh.castShadow = true;
+            ctx.reflect(m, 0.3);
+        });
+        shelf.add(plant);
+    } else {
+        addMesh(shelf, new THREE.CylinderGeometry(0.05, 0.04, 0.08, 14), std(0xe5e2ee), [width / 2 - 0.12, 0.058, 0.13]);
+        for (let i = 0; i < 6; i++) {
+            const leaf = addMesh(shelf, new THREE.SphereGeometry(0.035, 10, 8), std(0x7c8b6f, { roughness: 0.6 }), [
+                width / 2 - 0.12 + (rand() - 0.5) * 0.07,
+                0.16 + rand() * 0.07,
+                0.13 + (rand() - 0.5) * 0.07,
+            ]);
+            leaf.scale.set(0.7, 1.7, 0.7);
+        }
     }
 
     const item = ctx.interactive(shelf, { key: 'books', section: 'about' });
@@ -705,6 +566,7 @@ function buildSpeakers(ctx) {
                     obj.receiveShadow = true;
                     noRaycast(obj);
                 });
+                eachMaterial(clone, (m) => ctx.reflect(m, 0.6));
                 unit.spk.add(clone);
                 item.adopt(clone, { tint: 0.3 }); // resaltado rosa más suave: el modelo es negro y metálico
                 clone.traverse((obj) => {
@@ -729,7 +591,7 @@ function buildSpeakers(ctx) {
                 // modelo: un "latido" leve hacia arriba y las luces suben con el volumen
                 unit.model.scale.set(1 + level * 0.03, 1 + level * 0.06, 1 + level * 0.03);
                 unit.glow.forEach(({ m, base }) => {
-                    m.emissiveIntensity = base * (0.6 + music * 0.6 + level * (ctx.hdr ? 4 : 1.5));
+                    m.emissiveIntensity = base * (0.6 + music * 0.6 + level * (ctx.hdr ? 4 : 1.5)) * (1 + ctx.world.party);
                 });
             } else {
                 unit.woofer.scale.setScalar(1 + level * 0.55);
@@ -778,6 +640,8 @@ function buildDust(ctx) {
         }
         geo.attributes.position.needsUpdate = true;
         mat.color.copy(dusk).lerp(dayColor, ctx.world.day).lerp(night, ctx.world.night);
+        if (ctx.world.party > 0.01) mat.color.lerp(new THREE.Color().setHSL((t * 0.15) % 1, 0.9, 0.7), ctx.world.party);
+        mat.opacity = 0.55 + ctx.world.party * 0.35;
     });
 }
 
@@ -805,14 +669,20 @@ function buildLights(ctx) {
     const skyDusk = new THREE.Color(0xd890a8);
     const skyDay = new THREE.Color(0xe8eeff);
     const skyNight = new THREE.Color(0x7f8cff);
-    ctx.animations.push(() => {
+    const party = new THREE.Color();
+    ctx.animations.push((t) => {
         const d = world.day;
         const n = world.night;
         hemi.intensity = 0.55 + 0.25 * d - 0.3 * n;
         sky.color.copy(skyDusk).lerp(skyDay, d).lerp(skyNight, n);
         // con lluvia o niebla entra menos luz; los relámpagos la disparan un instante
         sky.intensity = (8 + 2 * d - 4 * n) * (1 - 0.35 * world.rain - 0.25 * world.fog) + ctx.flash * 60;
-        key.intensity = 30 + 4 * d - 12 * n;
+        // el foco de la sala es "nuestra" luz: se enciende con la sala al entrar
+        key.intensity = (30 + 4 * d - 12 * n) * (0.15 + 0.85 * ctx.wake.room);
+        // modo fiesta: la luz de la cristalera cambia de color al ritmo de la música
+        party.setHSL((t * 0.1 + 0.5) % 1, 0.85, 0.6);
+        sky.color.lerp(party, world.party);
+        sky.intensity += world.party * ctx.musicLevel * 25;
     });
 }
 

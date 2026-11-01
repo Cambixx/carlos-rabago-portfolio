@@ -42,28 +42,6 @@ function roundRect(ctx, x, y, w, h, r) {
     ctx.roundRect(x, y, w, h, r);
 }
 
-/** Teclado: rejilla de teclas redondeadas, vista cenital. */
-export function keyboardTexture() {
-    return canvasTexture(512, 170, (ctx, w, h) => {
-        ctx.fillStyle = '#d9d6e2';
-        ctx.fillRect(0, 0, w, h);
-        const rows = [14, 14, 13, 12, 6];
-        const pad = 10;
-        const rh = (h - pad * 2) / rows.length;
-        rows.forEach((n, r) => {
-            const rw = (w - pad * 2) / n;
-            for (let c = 0; c < n; c++) {
-                const x = pad + c * rw;
-                const y = pad + r * rh;
-                const accent = r === 0 && c === n - 1;
-                ctx.fillStyle = accent ? '#ff9ebd' : '#f4f2f8';
-                roundRect(ctx, x + 2, y + 2, rw - 4, rh - 4, 4);
-                ctx.fill();
-            }
-        });
-    });
-}
-
 const SCREEN = { w: 1024, h: 576 };
 const TERMINAL = { x: 28, y: 324, w: 470, h: 220 };
 

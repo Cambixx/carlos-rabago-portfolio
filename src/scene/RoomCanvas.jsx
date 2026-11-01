@@ -5,6 +5,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { CSS3DObject, CSS3DRenderer } from 'three/addons/renderers/CSS3DRenderer.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { getMusicLevel } from '../lib/audio';
 import { buildRoom } from './buildRoom';
 import { MODELS, loadModel } from './models';
@@ -53,6 +54,9 @@ export default function RoomCanvas({
     onHover,
     onExplore,
     onScreenMount,
+    onRoomEvent,
+    onIntroDone,
+    guide,
     onReady,
     onUnsupported,
 }) {
@@ -60,9 +64,10 @@ export default function RoomCanvas({
     const labelsRef = useRef(null);
     const roomRef = useRef(null);
     const live = useRef({});
-    live.current = { section, entered, world, screenMode };
+    live.current = { section, entered, world, screenMode, guide };
     const callbacks = useRef({});
-    callbacks.current = { onSelect, onInteract, onHover, onExplore, onScreenMount, onReady, onUnsupported };
+    callbacks.current = { onSelect, onInteract, onHover, onExplore, onScreenMount, onRoomEvent, onIntroDone, onReady, onUnsupported };
+    const bubbleRef = useRef(null);
 
     const refreshHoverRef = useRef(null);
 
@@ -82,8 +87,9 @@ export default function RoomCanvas({
             // la pantalla se pintan en canvas con las webfonts: hay que esperarlas o salen
             // con la tipografía de reserva.
             const officeLoad = loadModel(MODELS.office.url);
-            // la silla es opcional: si no carga, se usa la de la oficina
-            const chairLoad = loadModel(MODELS.chair.url).catch(() => null);
+            // el resto de modelos es opcional: si alguno no carga, la sala usa su versión sencilla
+            const OPTIONAL = ['chair', 'lamp', 'deskPlant', 'stationery'];
+            const optionalLoads = OPTIONAL.map((key) => loadModel(MODELS[key].url).catch(() => null));
             try {
                 await Promise.all([
                     document.fonts.load('700 30px "Space Grotesk Variable"'),
@@ -94,9 +100,11 @@ export default function RoomCanvas({
                 /* si falla, se dibuja con la fuente de reserva */
             }
             let office;
-            let chairModel;
+            const models = {};
             try {
-                [office, chairModel] = await Promise.all([officeLoad, chairLoad]);
+                const [loadedOffice, ...optional] = await Promise.all([officeLoad, ...optionalLoads]);
+                office = loadedOffice;
+                OPTIONAL.forEach((key, i) => (models[key] = optional[i]));
             } catch {
                 // sin la sala no hay escena: la versión plana tiene todo el contenido
                 if (!disposed) callbacks.current.onUnsupported?.();
@@ -124,9 +132,19 @@ export default function RoomCanvas({
             renderer.domElement.className = 'room-canvas';
             mount.prepend(renderer.domElement);
 
-            const room = buildRoom({ office, chairModel, lowPower, lang });
+            // reflejos para metal, cristal y cerámica: un "estudio" virtual prefiltrado
+            const pmrem = new THREE.PMREMGenerator(renderer);
+            const envMap = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+            pmrem.dispose();
+
+            const room = buildRoom({ office, models, envMap, lowPower, lang });
             roomRef.current = room;
             room.apply(live.current.world);
+            room.onEvent = (name) => callbacks.current.onRoomEvent?.(name);
+            let woken = false;
+            let talking = 0;
+            // mientras dura el vuelo de entrada no hay etiquetas ni interacción: es la presentación
+            let introFlying = false;
             const { scene, hotspots } = room;
             const camera = new THREE.PerspectiveCamera(STOPS.intro.fov, 1, 0.05, 40);
 
@@ -209,7 +227,7 @@ export default function RoomCanvas({
                 const ctrl = pose.pos.clone().lerp(toPos, 0.5);
                 ctrl.y += 0.15 + dist * 0.12;
                 ctrl.z += dist * 0.15;
-                const duration = reducedMotion ? 0.001 : key === 'hero' && stopKey === 'intro' ? 2.6 : clamp(0.9 + dist * 0.28, 1.1, 1.9);
+                const duration = reducedMotion ? 0.001 : stopKey === 'intro' ? 3.4 : clamp(0.9 + dist * 0.28, 1.1, 1.9);
                 tween = {
                     from: { pos: pose.pos.clone(), look: pose.look.clone(), fov: pose.fov },
                     to: { pos: toPos, look: to.look, fov: to.fov },
@@ -217,6 +235,7 @@ export default function RoomCanvas({
                     t: 0,
                     duration,
                 };
+                if (stopKey === 'intro') introFlying = true;
                 stopKey = key;
             };
 
@@ -259,7 +278,7 @@ export default function RoomCanvas({
             let pinch = null;
             let hovered = null;
             const lastPointer = { x: 0, y: 0 };
-            const canInteract = () => live.current.entered && !live.current.section;
+            const canInteract = () => live.current.entered && !live.current.section && !introFlying;
 
             const pick = (clientX, clientY) => {
                 const rect = el.getBoundingClientRect();
@@ -433,6 +452,11 @@ export default function RoomCanvas({
                 const dt = Math.min(clock.getDelta(), 0.05);
                 time += dt;
                 const { entered, section: active } = live.current;
+                // al entrar, la sala "se despierta" (luces, neón, flexo y monitor por orden)
+                if (entered && !woken) {
+                    woken = true;
+                    room.wake({ instant: reducedMotion });
+                }
                 const key = !entered ? 'intro' : active || 'hero';
                 if (key !== stopKey) startTween(key);
                 // al cruzar el punto de corte (p. ej. al girar una tablet) cambia el encuadre de Proyectos
@@ -450,7 +474,13 @@ export default function RoomCanvas({
                     pose.pos.copy(a).lerp(b, e);
                     pose.look.copy(tween.from.look).lerp(tween.to.look, e);
                     pose.fov = tween.from.fov + (tween.to.fov - tween.from.fov) * e;
-                    if (tween.t >= 1) tween = null;
+                    if (tween.t >= 1) {
+                        tween = null;
+                        if (introFlying) {
+                            introFlying = false;
+                            callbacks.current.onIntroDone?.();
+                        }
+                    }
                 }
 
                 // Con el panel de Proyectos abierto la escena queda tapada: se dibuja un
@@ -463,7 +493,7 @@ export default function RoomCanvas({
                     adaptResolution(dt);
                 }
 
-                const free = entered && !active;
+                const free = entered && !active && !introFlying;
                 if (!free && hovered) setHovered(null, 0, 0);
                 if (!free) {
                     view.targetYaw = 0;
@@ -548,6 +578,23 @@ export default function RoomCanvas({
                     labels[i].classList.toggle('is-hover', hovered === spot);
                 });
 
+                // bocadillo del guía sobre el casco del astronauta
+                const guideNow = live.current.guide;
+                talking += ((guideNow && free ? 1 : 0) - talking) * Math.min(1, dt * 6);
+                room.guideTalking = talking;
+                const bubble = bubbleRef.current;
+                if (bubble && room.anchors.astronaut) {
+                    tmp.copy(room.anchors.astronaut).project(camera);
+                    const visible = Boolean(guideNow) && free && tmp.z < 1 && Math.abs(tmp.x) < 0.95 && Math.abs(tmp.y) < 0.95;
+                    const bx = ((tmp.x + 1) / 2) * w;
+                    bubble.style.transform = `translate(${bx.toFixed(1)}px, ${(((1 - tmp.y) / 2) * h).toFixed(1)}px)`;
+                    // en pantallas estrechas el bocadillo se desplaza para no salirse; el pico sigue apuntando al casco
+                    const half = Math.min(135, w * 0.36) + 12;
+                    const shift = Math.max(0, half - bx) + Math.min(0, w - half - bx);
+                    bubble.style.setProperty('--shift', `${shift.toFixed(1)}px`);
+                    bubble.classList.toggle('is-on', visible);
+                }
+
                 if (!readyFired) {
                     readyFired = true;
                     callbacks.current.onReady?.();
@@ -574,6 +621,7 @@ export default function RoomCanvas({
                         m.dispose();
                     });
                 });
+                envMap.dispose();
                 composer?.renderTarget1.dispose();
                 composer?.renderTarget2.dispose();
                 composer?.dispose();
@@ -596,6 +644,9 @@ export default function RoomCanvas({
     return (
         <div ref={mountRef} className="room-mount">
             <div ref={labelsRef} className="spot-labels" aria-hidden="true" />
+            <div ref={bubbleRef} className="guide-bubble" role="status" aria-live="polite">
+                {guide?.text && <p key={guide.id}>{guide.text}</p>}
+            </div>
         </div>
     );
 }

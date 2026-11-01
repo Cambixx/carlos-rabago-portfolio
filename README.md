@@ -43,6 +43,18 @@ Netlify: _Site configuration → Build & deploy → Link repository_.
 
 ## Qué se puede hacer en la sala
 
+- **Entrada:** la cámara empieza fuera de la cristalera y entra mientras la sala se despierta por
+  orden (luz general, neón con parpadeo, flexo y monitor), con sonido si se entró con él. El
+  HUD aparece al aterrizar. Quien ya ha entrado antes ve un arranque corto, y el boot siempre
+  tiene un botón «Saltar».
+- **El guía (astronauta):** habla con bocadillos sobre su casco: saluda según la hora de Madrid,
+  cuenta el tiempo que hace, da una pista sobre algo sin descubrir si nadie toca nada durante
+  un rato y anima al llegar a 3, 6 y 11 objetos. Mientras habla, el título se aparta. Lógica en
+  `src/lib/useGuide.js`; frases en `strings.js` → `guide`.
+- **Final:** al descubrir los 12 objetos se activa el **modo fiesta** (la sala cambia de color al
+  ritmo de la música) y aparece una **tarjeta de visitante** descargable (PNG 1200 × 630 que se
+  dibuja en el navegador: `src/lib/visitorCard.js`). Desde entonces el menú tiene «Modo fiesta» y
+  «Tarjeta de visitante».
 - **Mirar:** arrastrar (con inercia), rueda o pellizco para acercar, doble clic en una zona
   vacía para volver al centro. Si nadie toca nada, la cámara se balancea despacio.
 - **Navegar:** rombos rosas, barra inferior, teclas 1–4 y flechas; Esc vuelve a la sala.
@@ -111,8 +123,14 @@ modelo los reemplaza al terminar de cargar.
 3. Regístralo en `src/scene/models.js` (ruta, altura en metros, materiales que brillan) y sus
    créditos en `src/scene/credits.js`: se muestran en Contacto (CC BY obliga a citar al autor).
 
+El flexo (`lamp.glb`), la planta de la estantería (`desk-plant.glb`) y el material de escritorio
+(`stationery.glb`) son de **Poly Haven** (CC0) y se cargan igual: si alguno falla, se dibuja una
+versión simple con geometría. El resto del escritorio (monitor, teclado, ratón, taza, libreta,
+móvil y astronauta) es geometría propia en `src/scene/desk.js`.
+
 Créditos actuales (Sketchfab, CC BY 4.0): «Minimalistic Modern Office» de dylanheyes,
-«Office Chair» de djeustice y «Speaker Vipe Nitro X7» de madebyvipe.
+«Office Chair» de djeustice y «Speaker Vipe Nitro X7» de madebyvipe. Poly Haven (CC0):
+Desk Lamp Arm 01, Potted Plant 04 y Stationery Supplies.
 
 ## Imágenes de proyectos
 
@@ -121,6 +139,25 @@ genera versiones WebP de 1280 px en `public/projects/`, que son las que usa el s
 (`image` en `projects.json`). Al añadir un proyecto: suelta la captura, ejecuta el script y
 apunta `image` a `/projects/<nombre>.webp` en ambos idiomas.
 
+### Vídeos de proyectos
+
+Las tarjetas de proyecto con `video` en `projects.json` muestran un bucle corto de la web
+(scroll abajo y vuelta arriba, unos 15 s, 768 px, sin audio) en `public/projects/video/`. Solo se
+descarga y reproduce mientras la tarjeta está a la vista; con «reducir movimiento» o ahorro de
+datos se queda la imagen fija. La imagen fija es el primer fotograma del vídeo
+(`<nombre>.webp` junto al `.mp4`), para que no haya salto al empezar.
+
+Se grabaron con Chrome a 1280 × 720 (tras aceptar cookies y avisos de edad) y se comprimieron así:
+
+```sh
+ffmpeg -i captura.mp4 -vf "fps=30,scale=768:-2:flags=lanczos,format=yuv420p" \
+  -c:v libx264 -preset slow -crf 28 -profile:v high -movflags +faststart -an public/projects/video/<nombre>.mp4
+ffmpeg -i public/projects/video/<nombre>.mp4 -frames:v 1 -c:v libwebp -quality 80 public/projects/video/<nombre>.webp
+```
+
+Nexho, Budweiser y Boreal no tienen vídeo: la primera bloquea las visitas automatizadas, la
+segunda no responde y la tercera redirige ahora a otra empresa.
+
 ## Dónde cambiar cosas
 
 | Qué                                           | Dónde                                              |
@@ -128,9 +165,12 @@ apunta `image` a `/projects/<nombre>.webp` en ambos idiomas.
 | Proyectos, empleos, estudios, stack, contacto | `src/data/es/*.json` y `src/data/en/*.json`        |
 | Textos de interfaz, pistas y avisos (ES/EN)   | `src/i18n/strings.js`                              |
 | Capturas de proyectos                         | `src-images/projects/` y luego `npm run images`    |
+| Vídeos de proyectos                           | `public/projects/video/` y `video` en `projects.json` |
 | CV                                            | `public/cv/`                                       |
 | Colores y tipografía                          | variables `:root` al inicio de `src/styles.css`    |
 | Habitación (muebles, luces, texturas)         | `src/scene/buildRoom.js`, `src/scene/textures.js`  |
+| Objetos del escritorio                        | `src/scene/desk.js`                                |
+| Orden y tiempos del despertar de la sala      | `WAKE` en `src/scene/buildRoom.js`                 |
 | Posición de cámara de cada sección            | `src/scene/stops.js`                               |
 | Nombre y pista de cada objeto clicable        | `objects` en `src/i18n/strings.js`                 |
 | Qué pasa al pulsar cada objeto (avisos)       | `onInteract` en `src/App.jsx`                      |
@@ -141,6 +181,7 @@ apunta `image` a `/projects/<nombre>.webp` en ambos idiomas.
 | Qué objetos brillan y cuánto                  | llamadas a `ctx.glow(color, boost)` en `buildRoom.js` |
 | Cuándo Proyectos va dentro del monitor        | `screenMode` (media query) en `src/App.jsx`        |
 | Texto y pasos del boot                        | `boot` en `src/i18n/strings.js`                    |
+| Frases y ritmo del guía (astronauta)          | `guide` en `strings.js`, `src/lib/useGuide.js`     |
 
 Las insignias del panel perforado se generan solas desde `experience.json` (las cinco primeras
 entradas), así que añadir o quitar un empleo ahí cambia también la escena.

@@ -5,13 +5,15 @@
  * junto al panel (por ejemplo, el panel de Experiencia va a la izquierda y las
  * insignias quedan a la derecha).
  *
- * `intro` es la pose detrás del boot: al entrar, la cámara vuela de ahí al hero.
+ * `intro` es la pose detrás del boot (fuera del edificio): al entrar, la cámara
+ * atraviesa la cristalera hasta el hero mientras la sala se enciende.
  */
 // pared de las insignias (ver buildRoom.js)
 const WALL_X = 4.35;
 
 export const STOPS = {
-    intro: { pos: [-3.2, 3.3, 4.0], look: [1.2, 1.0, -2.2], fov: 64 },
+    // fuera del edificio, frente a la cristalera: el vuelo de entrada la atraviesa
+    intro: { pos: [0.3, 2.2, -6.0], look: [0, 1.4, 0], fov: 60 },
     hero: { pos: [-2.4, 1.95, 3.3], look: [1.4, 0.72, -2.1], fov: 54 },
     projects: { pos: [0, 1.25, 0.1], look: [0, 1.25, -1.25], fov: 50 },
     experience: { pos: [1.7, 1.95, 1.6], look: [WALL_X, 1.85, 0.3], fov: 56 },

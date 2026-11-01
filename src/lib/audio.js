@@ -122,6 +122,43 @@ export function switchClick() {
     setTimeout(() => tick(0.4), 60);
 }
 
+/** Zumbido entrecortado de un tubo de neón al arrancar. */
+export function neonBuzz() {
+    if (muted || !ctx) return;
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.value = 100;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.value = 900;
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.0001, now);
+    // el mismo patrón de parpadeo que la luz
+    [0, 1, 0, 0, 1, 0.3, 0, 1, 1, 0, 1, 1].forEach((v, i) => gain.gain.setValueAtTime(0.0001 + v * 0.03, now + i * 0.055));
+    gain.gain.setTargetAtTime(0.0001, now + 0.7, 0.15);
+    osc.connect(filter).connect(gain).connect(master);
+    osc.start(now);
+    osc.stop(now + 1.4);
+}
+
+/** Arranque del monitor: un barrido suave hacia arriba. */
+export function bootSound() {
+    if (muted || !ctx) return;
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(220, now);
+    osc.frequency.exponentialRampToValueAtTime(880, now + 0.35);
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.06, now + 0.05);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.6);
+    osc.connect(gain).connect(master);
+    osc.start(now);
+    osc.stop(now + 0.65);
+}
+
 /** "Pop" corto y agudo para pequeños gestos (taza, planta, astronauta). */
 export function pop(pitch = 1) {
     if (muted || !ctx) return;
