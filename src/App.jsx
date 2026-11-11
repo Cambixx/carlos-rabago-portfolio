@@ -1,13 +1,16 @@
-import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import Achievements from './components/Achievements';
 import Boot from './components/Boot';
+import CommandPalette from './components/CommandPalette';
 import VisitorCard from './components/VisitorCard';
 import FlatSite from './components/FlatSite';
-import { BackButton, Discoveries, HeroTitle, HoverTip, MenuButton, NavPill, StatusTab, Toast } from './components/Hud';
+import { BackButton, Discoveries, HeroTitle, HoverTip, MenuButton, NavPill, StatusTab, Toast, TourCaption } from './components/Hud';
 import { PANELS } from './components/panels';
 import { SECTION_IDS } from './content';
 import { useI18n } from './i18n/context';
 import { bootSound, chime, disableAudio, enableAudio, neonBuzz, pop, setRain, startMusic, stopMusic, switchClick, tick, whoosh } from './lib/audio';
+import { ACHIEVEMENTS, useAchievements } from './lib/achievements';
 import { RoomActionsContext } from './lib/roomActions';
 import { madridTime } from './lib/time';
 import { useGuide } from './lib/useGuide';
@@ -25,6 +28,11 @@ const STORAGE_KEY = 'sala-descubiertos';
 const VISITED_KEY = 'sala-visitada';
 const SITE = 'carlos-rabago.netlify.app';
 const TOAST_MS = 3200;
+const GRAVITY_MS = 14000; // la gravedad cero dura unos segundos y vuelve sola
+const KONAMI = ['ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowLeft', 'ArrowRight', 'b', 'a'];
+const IS_MAC = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+// cada paso del tour dura lo que se tarda en leerlo (con un mínimo y un máximo)
+const tourMs = (text) => Math.min(9500, Math.max(5200, 1800 + text.length * 52));
 // Clic en la ventana: día → atardecer → noche → día.
 const NEXT_SKY = { day: 'dusk', dusk: 'night', night: 'day' };
 
@@ -81,7 +89,7 @@ function saveDiscovered(set) {
 }
 
 export default function App() {
-    const { lang, t, c, sections } = useI18n();
+    const { lang, setLang, t, c, sections } = useI18n();
     const [reducedMotion] = useState(prefersReducedMotion);
     const [canRender3D] = useState(hasWebGL);
     const [flat, setFlat] = useState(initialFlat);
@@ -104,11 +112,21 @@ export default function App() {
     // En pantallas anchas Proyectos se ve dentro del monitor; en móvil, como panel.
     const screenMode = useMediaQuery('(min-width: 900px) and (min-aspect-ratio: 6/5)');
     // Estado de la sala. El cielo arranca según la hora de Madrid y se afina con el tiempo real.
-    const [world, setWorld] = useState(() => ({ lamp: true, sky: forced.sky ?? skyFor(null), music: false, weather: forced.weather, temp: null, party: false }));
+    const [world, setWorld] = useState(() => ({ lamp: true, sky: forced.sky ?? skyFor(null), music: false, weather: forced.weather, temp: null, party: false, gravity: false }));
     const [weather, setWeather] = useState(null);
     const skyTouched = useRef(Boolean(forced.sky)); // si alguien cambia la hora a mano, el tiempo real ya no la pisa
     const [discovered, setDiscovered] = useState(loadDiscovered);
     const [toast, setToast] = useState(null);
+    // Tour guiado: índice del paso actual (null = sin tour).
+    const [tour, setTour] = useState(null);
+    const tourRef = useRef(tour);
+    tourRef.current = tour;
+    const [palette, setPalette] = useState(false);
+    const [showAchievements, setShowAchievements] = useState(false);
+    // Modo foto: cada número nuevo pide a la escena una captura; `flash` repite el destello.
+    const [photo, setPhoto] = useState(0);
+    const [flash, setFlash] = useState(0);
+    const gravityTimer = useRef(null);
     const overlayRef = useRef(null);
     const worldRef = useRef(world);
     const discoveredRef = useRef(discovered);
@@ -118,9 +136,9 @@ export default function App() {
     worldRef.current = world;
     discoveredRef.current = discovered;
 
-    // El astronauta habla solo con la sala a la vista y la cámara ya dentro.
+    // El astronauta habla solo con la sala a la vista, la cámara ya dentro y sin tour.
     const { line: guideLine, busy: guideBusy, say: guideSay, touch: guideTouch } = useGuide({
-        active: booted && !flat && introDone && !section,
+        active: booted && !flat && introDone && !section && tour === null,
         t,
         discovered,
         allKeys: DISCOVERABLE_KEYS,
@@ -135,6 +153,14 @@ export default function App() {
         return () => clearTimeout(id);
     }, [toast]);
 
+    // Logros: el aviso llega un poco después, para no pisar el de la acción que lo ha desbloqueado.
+    const { unlocked, unlock } = useAchievements((id) => {
+        setTimeout(() => {
+            chime();
+            showToast(t.achievements.unlocked(t.achievements.items[id][0]));
+        }, 900);
+    });
+
     const go = useCallback((id, focusLine = null) => {
         setSection(id);
         setFocus(focusLine);
@@ -144,6 +170,15 @@ export default function App() {
         const url = id ? `#${id}` : window.location.pathname + window.location.search;
         window.history.replaceState(null, '', url);
     }, []);
+
+    // Navegación pedida por el visitante: si había un tour en marcha, se para.
+    const userGo = useCallback(
+        (id, focusLine = null) => {
+            setTour(null);
+            go(id, focusLine);
+        },
+        [go],
+    );
 
     const setMusic = useCallback((on) => {
         if (on) {
@@ -205,10 +240,14 @@ export default function App() {
                     weatherLine,
                     locale: lang === 'es' ? 'es-ES' : 'en-GB',
                     site: SITE,
+                    achievementsLine: `★ ${unlockedRef.current.size}/${ACHIEVEMENTS.length} ${t.achievements.title.toLowerCase()}`,
                 }),
             );
         (document.fonts?.ready ?? Promise.resolve()).then(draw, draw);
     }, [t, c, lang]);
+
+    const unlockedRef = useRef(unlocked);
+    unlockedRef.current = unlocked;
 
     // Final del juego: todo descubierto → fiesta, el astronauta lo celebra y llega la tarjeta.
     const celebrate = useCallback(() => {
@@ -247,10 +286,130 @@ export default function App() {
                 el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 return;
             }
-            go(id);
+            userGo(id);
         },
-        [flat, go],
+        [flat, userGo],
     );
+
+    // Gravedad cero (código Konami, terminal o paleta): todo flota unos segundos.
+    const setGravity = useCallback(
+        (on) => {
+            clearTimeout(gravityTimer.current);
+            setWorld((w) => ({ ...w, gravity: on }));
+            if (!on) return;
+            whoosh();
+            showToast(t.gravity.on);
+            unlock('gravity');
+            gravityTimer.current = setTimeout(() => {
+                setWorld((w) => ({ ...w, gravity: false }));
+                showToast(t.gravity.off);
+            }, GRAVITY_MS);
+        },
+        [showToast, t, unlock],
+    );
+    useEffect(() => () => clearTimeout(gravityTimer.current), []);
+
+    const startTour = useCallback(() => {
+        if (flat) return;
+        setCard(null);
+        setShowAchievements(false);
+        setTour(0);
+    }, [flat]);
+
+    // Pasos del tour con datos reales (empresa actual y número de proyectos).
+    const tourSteps = useMemo(() => {
+        const current = c.experience.items.find((job) => job.isCurrent) ?? c.experience.items[0];
+        const company = current.company.replace(/\w\S*/g, (w) => (w.length <= 2 ? w : w[0] + w.slice(1).toLowerCase()));
+        return t.tour.steps({ company, projects: c.projects.items.length });
+    }, [t, c]);
+
+    useEffect(() => {
+        if (tour === null) return undefined;
+        const step = tourSteps[tour];
+        go(step.section);
+        const id = setTimeout(() => {
+            if (tour + 1 < tourSteps.length) setTour(tour + 1);
+            else {
+                setTour(null);
+                unlock('tour');
+            }
+        }, tourMs(step.text));
+        return () => clearTimeout(id);
+        // el texto puede cambiar de idioma a mitad de paso sin reiniciarlo
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [tour]);
+
+    // Modo foto: la escena devuelve el fotograma; se le añade la firma y se descarga.
+    const takePhoto = useCallback(() => {
+        if (flat) return;
+        setTour(null);
+        if (section) {
+            go(null);
+            setTimeout(() => setPhoto((n) => n + 1), 1800);
+        } else setPhoto((n) => n + 1);
+    }, [flat, section, go]);
+
+    const onPhoto = useCallback(
+        (url) => {
+            setFlash((n) => n + 1);
+            tick(1.8);
+            setTimeout(() => tick(1.1), 70);
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const g = canvas.getContext('2d');
+                g.drawImage(img, 0, 0);
+                const k = canvas.width / 1440;
+                const pad = 32 * k;
+                const band = 150 * k;
+                const shade = g.createLinearGradient(0, canvas.height - band, 0, canvas.height);
+                shade.addColorStop(0, 'rgba(11,13,23,0)');
+                shade.addColorStop(1, 'rgba(11,13,23,0.8)');
+                g.fillStyle = shade;
+                g.fillRect(0, canvas.height - band, canvas.width, band);
+                g.fillStyle = '#ff9ebd';
+                g.font = `700 ${30 * k}px "Space Grotesk Variable", sans-serif`;
+                g.fillText(c.site.brand, pad, canvas.height - pad - 28 * k);
+                g.fillStyle = '#d9d5e6';
+                g.font = `400 ${15 * k}px "Space Mono", monospace`;
+                g.fillText(`${t.photo.caption} · Madrid ${madridTime().label} · ${SITE}`, pad, canvas.height - pad);
+                const a = document.createElement('a');
+                a.href = canvas.toDataURL('image/jpeg', 0.92);
+                a.download = t.photo.file;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                showToast(t.photo.saved);
+                unlock('photo');
+            };
+            img.src = url;
+        },
+        [c, t, showToast, unlock],
+    );
+
+    const downloadCv = useCallback(() => {
+        const a = document.createElement('a');
+        a.href = c.contact.cv.url;
+        a.download = '';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+    }, [c]);
+
+    const copyEmail = useCallback(() => {
+        navigator.clipboard?.writeText(c.contact.email).then(
+            () => showToast(t.palette.copied),
+            () => {},
+        );
+    }, [c, t, showToast]);
+
+    const toggleFlat = useCallback(() => {
+        setTour(null);
+        if (flat) setSceneReady(false);
+        setFlat(!flat);
+    }, [flat]);
 
     // `sudo contratar carlos` en el terminal
     const hire = useCallback(
@@ -285,6 +444,7 @@ export default function App() {
     const onInteract = useCallback(
         ({ key, section: target, focus: focusLine }) => {
             guideTouch();
+            setTour(null);
             let completed = false;
             if (!discoveredRef.current.has(key)) {
                 const next = new Set(discoveredRef.current).add(key);
@@ -317,6 +477,7 @@ export default function App() {
                         pop(0.8);
                         coffees.current += 1;
                         showToast(t.toasts.coffee(coffees.current));
+                        if (coffees.current >= 5) unlock('coffee');
                         break;
                     }
                     case 'astronaut':
@@ -342,7 +503,7 @@ export default function App() {
             }
             if (completed) celebrate();
         },
-        [go, setSky, showToast, t, toggleLamp, toggleMusic, guideSay, guideTouch, celebrate],
+        [go, setSky, showToast, t, toggleLamp, toggleMusic, guideSay, guideTouch, celebrate, unlock],
     );
 
     // Tiempo real de Madrid: no bloquea nada; si llega, ajusta el cielo y los efectos de la ventana.
@@ -364,23 +525,76 @@ export default function App() {
         setRain(sound && (world.weather === 'rain' || world.weather === 'storm'));
     }, [sound, world.weather]);
 
-    // Teclado: Esc vuelve a la sala, 1-4 saltan de sección, flechas recorren las secciones.
+    const modalOpen = palette || showAchievements || Boolean(card);
+
+    // Paleta de comandos: ⌘K / Ctrl+K en cualquier momento, o "/" fuera de un campo de texto.
     useEffect(() => {
-        if (!booted || flat) return undefined;
+        if (!booted) return undefined;
         const onKey = (e) => {
-            if (e.metaKey || e.ctrlKey || e.altKey || /input|textarea/i.test(e.target.tagName)) return;
-            if (e.key === 'Escape' && section) go(null);
-            const n = Number(e.key);
-            if (n >= 1 && n <= SECTION_IDS.length) go(SECTION_IDS[n - 1]);
-            if (section && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
-                const i = SECTION_IDS.indexOf(section);
-                const next = (i + (e.key === 'ArrowRight' ? 1 : -1) + SECTION_IDS.length) % SECTION_IDS.length;
-                go(SECTION_IDS[next]);
+            const typing = /input|textarea/i.test(e.target.tagName);
+            if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+                e.preventDefault();
+                setPalette((open) => !open);
+            } else if (e.key === '/' && !typing && !modalOpen) {
+                e.preventDefault();
+                setPalette(true);
             }
         };
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
-    }, [booted, flat, section, go]);
+    }, [booted, modalOpen]);
+
+    useEffect(() => {
+        if (palette) unlock('palette');
+    }, [palette, unlock]);
+
+    // Teclado: Esc vuelve a la sala (o para el tour), 1-4 saltan de sección, flechas recorren
+    // las secciones. Y el código Konami (↑↑↓↓←→←→BA) apaga la gravedad.
+    useEffect(() => {
+        if (!booted || flat || modalOpen) return undefined;
+        let konami = 0;
+        const onKey = (e) => {
+            if (e.metaKey || e.ctrlKey || e.altKey || /input|textarea/i.test(e.target.tagName)) return;
+            const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+            konami = key === KONAMI[konami] ? konami + 1 : key === KONAMI[0] ? 1 : 0;
+            if (konami === KONAMI.length) {
+                konami = 0;
+                setGravity(!worldRef.current.gravity);
+                return;
+            }
+            if (e.key === 'Escape' && tourRef.current !== null) {
+                setTour(null);
+                return;
+            }
+            if (e.key === 'Escape' && section) userGo(null);
+            const n = Number(e.key);
+            if (n >= 1 && n <= SECTION_IDS.length) userGo(SECTION_IDS[n - 1]);
+            if (section && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
+                const i = SECTION_IDS.indexOf(section);
+                const next = (i + (e.key === 'ArrowRight' ? 1 : -1) + SECTION_IDS.length) % SECTION_IDS.length;
+                userGo(SECTION_IDS[next]);
+            }
+        };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [booted, flat, section, userGo, modalOpen, setGravity]);
+
+    // Logros que dependen del estado de la sala.
+    useEffect(() => {
+        if (discovered.size === DISCOVERABLE_KEYS.length) unlock('explorer');
+    }, [discovered, unlock]);
+    useEffect(() => {
+        if (world.party && world.music) unlock('dj');
+    }, [world.party, world.music, unlock]);
+    useEffect(() => {
+        if (!introDone) return;
+        const { h } = madridTime();
+        if (h >= 22 || h < 6) unlock('night');
+    }, [introDone, unlock]);
+    const firstLang = useRef(lang);
+    useEffect(() => {
+        if (lang !== firstLang.current) unlock('polyglot');
+    }, [lang, unlock]);
 
     // Al abrir una sección, el foco pasa al panel para teclado y lectores de pantalla.
     useEffect(() => {
@@ -413,16 +627,52 @@ export default function App() {
             party={world.party}
             onToggleParty={() => setParty(!world.party)}
             onOpenCard={openCard}
+            extras={[
+                !flat && { id: 'tour', label: t.hud.tour, badge: '▶', run: startTour },
+                !flat && { id: 'photo', label: t.hud.photo, badge: 'JPG', run: takePhoto },
+                { id: 'achievements', label: t.hud.achievements, badge: `${unlocked.size}/${ACHIEVEMENTS.length}`, run: () => setShowAchievements(true) },
+                { id: 'palette', label: t.hud.palette, badge: IS_MAC ? '⌘K' : 'Ctrl K', run: () => setPalette(true) },
+            ].filter(Boolean)}
             flat={flat}
             canToggleFlat={canRender3D}
-            onToggleFlat={() => {
-                if (flat) setSceneReady(false);
-                setFlat(!flat);
-            }}
+            onToggleFlat={toggleFlat}
         />
     );
 
-    const roomActions = { navigate, toggleLamp, toggleMusic, setSky, getWorld: () => worldRef.current, weather, hire };
+    // Todo lo que se puede hacer desde la paleta de comandos.
+    const A = t.palette.actions;
+    const partyUnlocked = discovered.size === DISCOVERABLE_KEYS.length;
+    const commands = [
+        ...(section && !flat ? [{ id: 'room', group: 'go', label: A.room, hint: 'Esc', run: () => userGo(null) }] : []),
+        ...sections.map((sec) => ({ id: `go-${sec.id}`, group: 'go', label: sec.label, hint: sec.num, run: () => navigate(sec.id) })),
+        ...c.projects.items.map((p, i) => ({
+            id: `project-${i}`,
+            group: 'projects',
+            label: p.title,
+            hint: `${p.year} · ${p.category} ↗`,
+            keywords: `${(p.tech ?? []).join(' ')} ${p.url}`,
+            run: () => window.open(p.url, '_blank', 'noopener,noreferrer'),
+        })),
+        ...[
+            !flat && { id: 'tour', label: A.tour, run: startTour },
+            { id: 'cv', label: A.cv, keywords: 'curriculum resume pdf', run: downloadCv },
+            { id: 'email', label: A.email, hint: c.contact.email, keywords: 'contacto contact mail', run: () => (window.location.href = `mailto:${c.contact.email}`) },
+            { id: 'copy-email', label: A.copyEmail, hint: c.contact.email, keywords: 'contacto contact mail', run: copyEmail },
+            !flat && { id: 'lamp', label: A.lamp, keywords: 'luz light', run: toggleLamp },
+            { id: 'music', label: A.music, keywords: 'musica sonido sound', run: toggleMusic },
+            ...(flat ? [] : ['day', 'dusk', 'night'].map((sky) => ({ id: `sky-${sky}`, label: A[sky], run: () => setSky(sky) }))),
+            !flat && partyUnlocked && { id: 'party', label: A.party, keywords: 'fiesta party', run: () => setParty(!worldRef.current.party) },
+            !flat && { id: 'gravity', label: A.gravity, keywords: 'konami espacio space', run: () => setGravity(!worldRef.current.gravity) },
+            !flat && { id: 'photo', label: A.photo, keywords: 'captura screenshot', run: takePhoto },
+            { id: 'lang', label: A.lang, keywords: 'idioma language english espanol', run: () => setLang(lang === 'es' ? 'en' : 'es') },
+            canRender3D && { id: 'flat', label: flat ? A.view3d : A.flat, run: toggleFlat },
+            { id: 'achievements', label: A.achievements, hint: `${unlocked.size}/${ACHIEVEMENTS.length}`, keywords: 'logros achievements', run: () => setShowAchievements(true) },
+        ]
+            .filter(Boolean)
+            .map((cmd) => ({ ...cmd, group: 'actions' })),
+    ];
+
+    const roomActions = { navigate, toggleLamp, toggleMusic, setSky, getWorld: () => worldRef.current, weather, hire, unlock, setGravity, startTour };
 
     return (
         <RoomActionsContext.Provider value={roomActions}>
@@ -436,13 +686,15 @@ export default function App() {
                             entered={booted}
                             world={world}
                             reducedMotion={reducedMotion}
-                            onSelect={go}
+                            onSelect={userGo}
                             onInteract={onInteract}
                             onHover={onHover}
                             onExplore={setExploring}
                             onRoomEvent={onRoomEvent}
                             onIntroDone={onIntroDone}
-                            guide={section ? null : guideLine}
+                            guide={section || tour !== null ? null : guideLine}
+                            photo={photo}
+                            onPhoto={onPhoto}
                             screenMode={screenMode}
                             onScreenMount={setScreenHost}
                             onReady={() => setSceneReady(true)}
@@ -455,12 +707,25 @@ export default function App() {
 
                 {booted && !flat && introDone && (
                     <>
-                        <HeroTitle hidden={Boolean(section) || exploring || guideBusy} />
-                        {section ? <BackButton onClick={() => go(null)} /> : <Discoveries count={discovered.size} total={DISCOVERABLE_KEYS.length} />}
+                        <HeroTitle hidden={Boolean(section) || exploring || guideBusy || tour !== null} onTour={startTour} />
+                        {section ? <BackButton onClick={() => userGo(null)} /> : <Discoveries count={discovered.size} total={DISCOVERABLE_KEYS.length} />}
                         <StatusTab />
+                        <button type="button" className="palette-chip" onClick={() => setPalette(true)} aria-label={t.hud.palette}>
+                            <span aria-hidden="true">⌕</span>
+                            <kbd>{IS_MAC ? '⌘K' : 'Ctrl K'}</kbd>
+                        </button>
                         {menu}
-                        <NavPill section={section} onSelect={go} />
-                        {!section && (
+                        <NavPill section={section} onSelect={userGo} />
+                        {tour !== null && (
+                            <TourCaption
+                                step={tour}
+                                total={tourSteps.length}
+                                text={tourSteps[tour].text}
+                                duration={tourMs(tourSteps[tour].text)}
+                                onSkip={() => setTour(null)}
+                            />
+                        )}
+                        {!section && tour === null && (
                             <p className="hint">
                                 {exploring ? t.hud.hintExploring : t.hud.hint}
                             </p>
@@ -488,10 +753,14 @@ export default function App() {
                     <>
                         {menu}
                         <FlatSite />
+                        <Toast toast={toast} />
                     </>
                 )}
 
+                {flash > 0 && <div key={flash} className="photo-flash" aria-hidden="true" />}
                 {card && <VisitorCard image={card} onClose={() => setCard(null)} />}
+                {showAchievements && <Achievements unlocked={unlocked} onClose={() => setShowAchievements(false)} />}
+                {palette && <CommandPalette commands={commands} onClose={() => setPalette(false)} />}
 
                 {!booted && <Boot ready={flat || sceneReady} reducedMotion={reducedMotion} short={returning} onEnter={enter} />}
             </div>

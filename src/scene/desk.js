@@ -21,6 +21,7 @@ export function buildDesk(ctx, { top, back, models }) {
         [0.34, top + 0.003, -0.9],
     );
     mouse.scale.set(0.06, 0.034, 0.105);
+    ctx.float(mouse, 1.1);
 
     buildPhone(ctx, [0.9, top, -0.82]);
     buildNotebook(ctx, [-0.95, top, -0.86]);
@@ -33,6 +34,7 @@ export function buildDesk(ctx, { top, back, models }) {
             ctx.reflect(m, 0.4);
         });
         scene.add(stationery);
+        ctx.float(stationery, 2.3, 1.3);
     }
 
     const screen = buildMonitor(ctx, [0, top, -1.25]);
@@ -78,6 +80,7 @@ function buildMonitor(ctx, [mx, top, mz]) {
 /** Teclado de aluminio con teclas individuales. Clic: las teclas se hunden y el monitor teclea. */
 function buildKeyboard(ctx, screen, [x, top, z]) {
     const kb = group(ctx.scene, [x, top, z]);
+    ctx.float(kb, 5.7, 0.7);
     kb.rotation.x = 0.03;
     const aluminium = ctx.reflect(std(0xc4c7cf, { roughness: 0.32, metalness: 0.85 }), 0.7);
     addMesh(kb, rounded(0.44, 0.011, 0.135, 0.005), aluminium, [0, 0.0055, 0]);
@@ -126,12 +129,14 @@ function buildKeyboard(ctx, screen, [x, top, z]) {
 
 function buildPhone(ctx, [x, top, z]) {
     const phone = group(ctx.scene, [x, top, z], 0.5);
+    ctx.float(phone, 6.4, 1.2);
     addMesh(phone, rounded(0.072, 0.008, 0.15, 0.0035), ctx.reflect(std(0x07080c, { roughness: 0.1, metalness: 0.35 }), 1), [0, 0.004, 0]);
 }
 
 /** Libreta tipo Moleskine: tapa oscura, cantos de papel y goma rosa. */
 function buildNotebook(ctx, [x, top, z]) {
     const notebook = group(ctx.scene, [x, top, z], -0.3);
+    ctx.float(notebook, 8.8, 1.1);
     addMesh(notebook, rounded(0.15, 0.016, 0.21, 0.004), std(0x1c1d22, { roughness: 0.8 }), [0, 0.008, 0]);
     addMesh(notebook, box(0.145, 0.011, 0.203), std(0xefe9dc, { roughness: 0.9 }), [0.004, 0.008, 0], { shadow: false });
     addMesh(notebook, box(0.006, 0.0172, 0.212), std(PINK, { roughness: 0.6 }), [0.055, 0.008, 0], { shadow: false });
@@ -182,8 +187,9 @@ function buildMug(ctx, position) {
 
     ctx.animations.push((t, dt) => {
         sip = Math.max(0, sip - dt / 0.7);
-        mug.rotation.z = Math.sin(sip * Math.PI) * 0.35;
-        mug.position.y = pos.y + Math.sin(sip * Math.PI) * 0.04;
+        const d = ctx.drift(3.3, t, 1.4);
+        mug.rotation.set(d.rx, d.ry, Math.sin(sip * Math.PI) * 0.35 + d.rz);
+        mug.position.y = pos.y + Math.sin(sip * Math.PI) * 0.04 + d.y;
         puffs.forEach((p) => {
             if (p.t >= 1) {
                 p.m.visible = false;
@@ -285,6 +291,7 @@ function buildAstronaut(ctx, [x, y, z]) {
     addMesh(g, box(0.02, 0.012, 0.004), new THREE.MeshBasicMaterial({ color: ctx.glow(PINK, 2), toneMapped: false }), [0, 0.09, 0.021], { shadow: false });
 
     let jump = 1;
+    let orbit = 0; // vueltas que da flotando con la gravedad cero
     const item = ctx.interactive(g, {
         key: 'astronaut',
         onClick: () => {
@@ -302,8 +309,13 @@ function buildAstronaut(ctx, [x, y, z]) {
             lift = Math.sin(Math.PI * jump) * 0.17;
             spin = easeInOut(jump) * Math.PI * 2;
         }
-        g.position.y = y + lift;
-        g.rotation.y = -0.3 + Math.sin(t * 0.5) * 0.12 + spin;
+        // con gravedad cero el astronauta está en su elemento: sube más y da vueltas despacio
+        const d = ctx.drift(9.1, t, 2.4);
+        const gravity = ctx.world.gravity;
+        if (gravity > 0.01) orbit += dt * 0.6 * gravity;
+        else orbit += (Math.round(orbit / (Math.PI * 2)) * Math.PI * 2 - orbit) * Math.min(1, dt * 2); // vuelve de frente
+        g.position.y = y + lift + d.y;
+        g.rotation.set(d.rx * 0.8, -0.3 + Math.sin(t * 0.5) * 0.12 + spin + orbit, d.rz);
         // saluda con el brazo al pasar el cursor (o cuando el guía habla)
         const wave = Math.max(item.hover(), ctx.guideTalking);
         armL.rotation.z = wave * (2.4 + Math.sin(t * 12) * 0.35);

@@ -57,6 +57,8 @@ export default function RoomCanvas({
     onRoomEvent,
     onIntroDone,
     guide,
+    photo = 0,
+    onPhoto,
     onReady,
     onUnsupported,
 }) {
@@ -64,9 +66,9 @@ export default function RoomCanvas({
     const labelsRef = useRef(null);
     const roomRef = useRef(null);
     const live = useRef({});
-    live.current = { section, entered, world, screenMode, guide };
+    live.current = { section, entered, world, screenMode, guide, photo };
     const callbacks = useRef({});
-    callbacks.current = { onSelect, onInteract, onHover, onExplore, onScreenMount, onRoomEvent, onIntroDone, onReady, onUnsupported };
+    callbacks.current = { onSelect, onInteract, onHover, onExplore, onScreenMount, onRoomEvent, onIntroDone, onPhoto, onReady, onUnsupported };
     const bubbleRef = useRef(null);
 
     const refreshHoverRef = useRef(null);
@@ -145,6 +147,7 @@ export default function RoomCanvas({
             let talking = 0;
             // mientras dura el vuelo de entrada no hay etiquetas ni interacción: es la presentación
             let introFlying = false;
+            let photoTaken = live.current.photo; // última foto ya entregada (ver modo foto)
             const { scene, hotspots } = room;
             const camera = new THREE.PerspectiveCamera(STOPS.intro.fov, 1, 0.05, 40);
 
@@ -560,9 +563,19 @@ export default function RoomCanvas({
                     screenEl.classList.toggle('is-on', screenOn);
                 }
 
+                // modo foto: sin los rombos de sección, y el lienzo se lee justo después de dibujar
+                const wantPhoto = live.current.photo !== photoTaken;
+                if (wantPhoto) hotspots.forEach((spot) => (spot.group.visible = false));
+
                 if (composer) composer.render();
                 else renderer.render(scene, camera);
                 css.render(scene, camera);
+
+                if (wantPhoto) {
+                    photoTaken = live.current.photo;
+                    if (photoTaken) callbacks.current.onPhoto?.(renderer.domElement.toDataURL('image/jpeg', 0.92));
+                    hotspots.forEach((spot) => (spot.group.visible = true));
+                }
 
                 // etiquetas de los rombos: proyectar su posición a pantalla
                 const w = mount.clientWidth;

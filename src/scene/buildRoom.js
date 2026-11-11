@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { badgeTexture, createClock, dropletsTexture, pegboardTexture, rainTexture, rng, roundSprite, snowTexture } from './textures';
 import { buildDesk } from './desk';
+import { buildSkyline } from './skyline';
 import { PINK, addMesh, box, eachMaterial, fitModel, group, rounded, std } from './helpers';
 import { makeInteractive, noRaycast } from './interactive';
 import { MODELS, loadModel } from './models';
@@ -55,8 +56,8 @@ export function buildRoom({ office, models = {}, envMap = null, lowPower = false
         items: [],
         hotspots: [],
         // valores actuales (0..1) que se acercan suavemente a `target`
-        world: { lamp: 1, day: 0, night: 0, music: 0, rain: 0, snow: 0, fog: 0, party: 0 },
-        target: { lamp: 1, day: 0, night: 0, music: 0, rain: 0, snow: 0, fog: 0, party: 0 },
+        world: { lamp: 1, day: 0, night: 0, music: 0, rain: 0, snow: 0, fog: 0, party: 0, gravity: 0 },
+        target: { lamp: 1, day: 0, night: 0, music: 0, rain: 0, snow: 0, fog: 0, party: 0, gravity: 0 },
         musicLevel: 0,
         storm: false,
         flash: 0, // relámpago (0..1), solo con tormenta
@@ -80,6 +81,27 @@ export function buildRoom({ office, models = {}, envMap = null, lowPower = false
     };
     /** Color emisivo: en HDR se multiplica por `boost` para que supere el umbral del bloom. */
     ctx.glow = (color, boost) => new THREE.Color(color).multiplyScalar(ctx.hdr ? boost : 1);
+    /**
+     * Gravedad cero: cuánto sube y gira un objeto ahora mismo (0 si no hay gravedad cero).
+     * Cada objeto usa su propia semilla para no moverse a la vez que los demás.
+     */
+    const still = { y: 0, rx: 0, ry: 0, rz: 0 };
+    ctx.drift = (seed, t, lift = 1) => {
+        const g = ctx.world.gravity;
+        if (g < 0.001) return still;
+        return {
+            y: g * lift * (0.1 + 0.08 * ((seed * 7.31) % 1) + Math.sin(t * 0.7 + seed) * 0.025),
+            rx: g * Math.sin(t * 0.43 + seed) * 0.45,
+            ry: g * Math.sin(t * 0.31 + seed * 2.1) * 0.6,
+            rz: g * Math.cos(t * 0.37 + seed * 1.3) * 0.4,
+        };
+    };
+    /** Registra un objeto quieto para que flote con la gravedad cero (vuelve a su sitio al acabar). */
+    ctx.floaters = [];
+    ctx.float = (object, seed, lift = 1) => {
+        ctx.floaters.push({ object, seed, lift, base: object.position.clone(), rot: object.rotation.clone(), resting: true });
+        return object;
+    };
     ctx.interactive = (root, def) => {
         const item = makeInteractive(root, { ...ctx.t.objects[def.key], ...def });
         ctx.items.push(item);
@@ -123,12 +145,25 @@ export function buildRoom({ office, models = {}, envMap = null, lowPower = false
     };
 
     setupOffice(ctx, office, models.chair ?? null);
+    buildSkyline(ctx);
     buildWeather(ctx);
     buildDesk(ctx, { top: DESK.top, back: DESK.back, models });
     buildFeatureWall(ctx, models);
     buildSpeakers(ctx);
     buildDust(ctx);
     buildLights(ctx);
+
+    // al final: la gravedad cero mueve objetos que ya han colocado sus propias animaciones
+    ctx.animations.push((t) => {
+        const off = ctx.world.gravity < 0.001;
+        ctx.floaters.forEach((f) => {
+            if (off && f.resting) return;
+            const d = ctx.drift(f.seed, t, f.lift);
+            f.object.position.set(f.base.x, f.base.y + d.y, f.base.z);
+            f.object.rotation.set(f.rot.x + d.rx, f.rot.y + d.ry, f.rot.z + d.rz);
+            f.resting = off;
+        });
+    });
 
     // Rombos rosas que flotan sobre cada zona: atajos a cada sección.
     [
@@ -145,8 +180,9 @@ export function buildRoom({ office, models = {}, envMap = null, lowPower = false
         ctx.hotspots.forEach((h) => h.tick(dt));
     };
 
-    const apply = ({ lamp, sky, music, weather, party }) => {
+    const apply = ({ lamp, sky, music, weather, party, gravity }) => {
         ctx.target.lamp = lamp ? 1 : 0;
+        ctx.target.gravity = gravity ? 1 : 0;
         ctx.target.party = party ? 1 : 0;
         ctx.target.day = sky === 'day' ? 1 : 0;
         ctx.target.night = sky === 'night' ? 1 : 0;
@@ -244,6 +280,10 @@ function setupOffice(ctx, office, chairModel) {
         spin += velocity * dt;
         velocity *= Math.exp(-dt * 1.4);
         chair.rotation.y = chairBaseRotation + spin;
+        const d = ctx.drift(4.2, t, 1.6);
+        chair.position.y = d.y;
+        chair.rotation.x = d.rx * 0.5;
+        chair.rotation.z = d.rz * 0.5;
     });
 
     // Las plantas son una sola malla: dos cajas invisibles hacen de zona de clic
@@ -302,6 +342,7 @@ function setupOffice(ctx, office, chairModel) {
     const white = new THREE.Color(1, 1, 1);
     const roomColor = new THREE.Color();
     const skyColor = new THREE.Color();
+    ctx.skyColor = skyColor; // la ciudad tras la cristalera se funde con este cielo
 
     const partyColor = new THREE.Color();
     ctx.animations.push((t) => {
@@ -470,7 +511,7 @@ function buildShelf(ctx, shelf, plantModel) {
             rot: rand() < 0.1 ? [0, 0, 0.18] : undefined,
         });
         book.scale.set(bw, bh, 0.2);
-        books.push({ mesh: book, baseZ: book.position.z, phase: rand() * Math.PI * 2 });
+        books.push({ mesh: book, baseZ: book.position.z, baseY: book.position.y, phase: rand() * Math.PI * 2 });
         x += bw + 0.004;
     }
     // una suculenta al final de la balda (modelo de Poly Haven; si no carga, una sencilla)
@@ -495,11 +536,17 @@ function buildShelf(ctx, shelf, plantModel) {
     }
 
     const item = ctx.interactive(shelf, { key: 'books', section: 'about' });
+    let floating = false;
     ctx.animations.push((t) => {
         const hover = item.hover();
-        if (hover === 0) return;
-        books.forEach((b) => {
+        const g = ctx.world.gravity;
+        if (hover === 0 && g < 0.001 && !floating) return;
+        floating = g >= 0.001;
+        books.forEach((b, i) => {
             b.mesh.position.z = b.baseZ + hover * (0.02 + Math.max(0, Math.sin(t * 3 + b.phase)) * 0.03);
+            const d = ctx.drift(i * 0.9 + 3, t, 0.6);
+            b.mesh.position.y = b.baseY + d.y;
+            b.mesh.rotation.set(d.rx * 0.6, 0, d.rz * 0.8);
         });
     });
 }
@@ -536,6 +583,7 @@ function buildSpeakers(ctx) {
         { x: 0.8, toeIn: -0.3 },
     ].forEach(({ x, toeIn }) => {
         const spk = group(speakers, [x, DESK.top, -1.22], toeIn); // girados hacia el centro, como monitores de estudio
+        ctx.float(spk, x > 0 ? 7.7 : 12.2, 0.9);
         addMesh(spk, box(0.16, 0.26, 0.15), std(0x0c0d1b, { roughness: 0.6 }), [0, 0.13, 0]);
         const woofer = group(spk, [0, 0.085, 0.076]);
         addMesh(woofer, new THREE.TorusGeometry(0.045, 0.009, 8, 24), std(0xcfd2e6, { metalness: 0.7, roughness: 0.3 }), [0, 0, 0]);

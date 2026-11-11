@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useI18n } from '../i18n/context';
 import LangSwitch from './LangSwitch';
 
-/** Título central: se desvanece al entrar en una sección o al explorar la sala. */
-export function HeroTitle({ hidden }) {
+/** Título central: se desvanece al entrar en una sección o al explorar la sala. Debajo, el botón del tour. */
+export function HeroTitle({ hidden, onTour }) {
     const { t, c } = useI18n();
     return (
         <div className={`hero-title ${hidden ? 'is-hidden' : ''}`} aria-hidden={hidden}>
@@ -12,6 +12,34 @@ export function HeroTitle({ hidden }) {
             </h1>
             <p>{t.tagline}</p>
             <p className="hero-role">{c.hero.subtitle}</p>
+            {onTour && (
+                <button type="button" className="hero-tour" onClick={onTour} tabIndex={hidden ? -1 : 0}>
+                    <span aria-hidden="true">▶</span> {t.tour.start}
+                </button>
+            )}
+        </div>
+    );
+}
+
+/** Subtítulos del tour guiado: texto del paso, progreso y "Saltar tour". */
+export function TourCaption({ step, total, text, duration, onSkip }) {
+    const { t } = useI18n();
+    return (
+        <div className="tour-caption" role="region" aria-label={t.tour.aria}>
+            <div className="tour-meta">
+                <span>
+                    ▶ {t.tour.aria} · {t.tour.step(step + 1, total)}
+                </span>
+                <button type="button" className="tour-skip" onClick={onSkip}>
+                    {t.tour.skip} ✕
+                </button>
+            </div>
+            <p key={step} aria-live="polite">
+                {text}
+            </p>
+            <div className="tour-bar" aria-hidden="true">
+                <i key={step} style={{ animationDuration: `${duration}ms` }} />
+            </div>
         </div>
     );
 }
@@ -39,7 +67,7 @@ export function NavPill({ section, onSelect }) {
 }
 
 /** Menú de cuatro puntos arriba a la derecha: idioma, sonido, música, CV y versión plana. */
-export function MenuButton({ sound, onToggleSound, music, onToggleMusic, flat, canToggleFlat, onToggleFlat, canParty, party, onToggleParty, onOpenCard }) {
+export function MenuButton({ sound, onToggleSound, music, onToggleMusic, flat, canToggleFlat, onToggleFlat, canParty, party, onToggleParty, onOpenCard, extras = [] }) {
     const { t, c } = useI18n();
     const [open, setOpen] = useState(false);
     const ref = useRef(null);
@@ -98,6 +126,20 @@ export function MenuButton({ sound, onToggleSound, music, onToggleMusic, flat, c
                             </button>
                         </>
                     )}
+                    {extras.map((item) => (
+                        <button
+                            key={item.id}
+                            type="button"
+                            role="menuitem"
+                            onClick={() => {
+                                setOpen(false);
+                                item.run();
+                            }}
+                        >
+                            <span>{item.label}</span>
+                            <b>{item.badge}</b>
+                        </button>
+                    ))}
                     <a role="menuitem" href={c.contact.cv.url} download>
                         <span>{t.hud.cv}</span>
                         <b>PDF</b>

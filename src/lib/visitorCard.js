@@ -8,7 +8,7 @@ const H = 630;
 const PINK = '#ff9ebd';
 const INVADER = ['..XXXX..', '.XXXXXX.', 'XX.XX.XX', 'XXXXXXXX', '.X.XX.X.', '.XXXXXX.', '.X....X.', 'X......X'];
 
-export function drawVisitorCard({ t, brand, count, total, seconds, weatherLine, locale, site }) {
+export function drawVisitorCard({ t, brand, count, total, seconds, weatherLine, locale, site, achievementsLine }) {
     const canvas = document.createElement('canvas');
     canvas.width = W;
     canvas.height = H;
@@ -65,7 +65,12 @@ export function drawVisitorCard({ t, brand, count, total, seconds, weatherLine, 
     const minutes = Math.floor(seconds / 60);
     ctx.fillStyle = '#4ade80';
     ctx.font = '700 26px "Space Mono", monospace';
-    ctx.fillText(`${count}/${total} ${t.objects}`, 88, 420);
+    const countLine = `${count}/${total} ${t.objects}`;
+    ctx.fillText(countLine, 88, 420);
+    if (achievementsLine) {
+        ctx.fillStyle = PINK;
+        ctx.fillText(achievementsLine, 88 + ctx.measureText(countLine).width + 36, 420);
+    }
     ctx.fillStyle = '#d9d5e6';
     ctx.font = '400 26px "Space Mono", monospace';
     ctx.fillText(t.time(minutes, seconds % 60), 88, 462);

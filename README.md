@@ -51,6 +51,21 @@ Netlify: _Site configuration → Build & deploy → Link repository_.
   cuenta el tiempo que hace, da una pista sobre algo sin descubrir si nadie toca nada durante
   un rato y anima al llegar a 3, 6 y 11 objetos. Mientras habla, el título se aparta. Lógica en
   `src/lib/useGuide.js`; frases en `strings.js` → `guide`.
+- **Madrid tras la cristalera:** la sierra, la ciudad, Torrespaña, las Torres KIO y las Cuatro
+  Torres (`src/scene/skyline.js`). Se dibujan una vez en un canvas de datos y un shader los pinta
+  según la hora y el tiempo: de noche se encienden ventanas, parpadean las balizas rojas y salen
+  estrellas y la luna con la fase real del día; con niebla o lluvia la ciudad se difumina.
+- **Tour guiado (1 min):** botón bajo el título, menú, paleta o `tour` en el terminal. La cámara
+  recorre las cuatro secciones con subtítulos (texto en `strings.js` → `tour`, con la empresa
+  actual y el número de proyectos sacados del contenido). Esc o «Saltar tour» lo paran.
+- **Paleta de comandos:** ⌘K / Ctrl+K o `/`. Busca secciones, proyectos (abre la web) y acciones:
+  CV, copiar email, hora del día, flexo, música, fiesta, foto, idioma, versión plana…
+- **Gravedad cero:** código Konami (↑↑↓↓←→←→BA), `gravedad` en el terminal o la paleta. Los
+  objetos registrados con `ctx.float()` (y los que usan `ctx.drift()`) flotan unos segundos.
+- **Modo foto:** menú o paleta. Descarga un JPG de la sala sin interfaz ni rombos, firmado.
+- **Logros secretos (10):** sala explorada, tour, gravedad cero, `sudo`, visita nocturna, cinco
+  cafés, fiesta con música, foto, cambio de idioma y paleta. Se guardan en el navegador
+  (`src/lib/achievements.js`), se ven en el menú y salen en la tarjeta de visitante.
 - **Final:** al descubrir los 12 objetos se activa el **modo fiesta** (la sala cambia de color al
   ritmo de la música) y aparece una **tarjeta de visitante** descargable (PNG 1200 × 630 que se
   dibuja en el navegador: `src/lib/visitorCard.js`). Desde entonces el menú tiene «Modo fiesta» y
@@ -182,6 +197,10 @@ segunda no responde y la tercera redirige ahora a otra empresa.
 | Cuándo Proyectos va dentro del monitor        | `screenMode` (media query) en `src/App.jsx`        |
 | Texto y pasos del boot                        | `boot` en `src/i18n/strings.js`                    |
 | Frases y ritmo del guía (astronauta)          | `guide` en `strings.js`, `src/lib/useGuide.js`     |
+| Skyline de Madrid (edificios, luces, luna)    | `src/scene/skyline.js`                             |
+| Guion del tour guiado                         | `tour` en `strings.js`                             |
+| Logros                                        | `src/lib/achievements.js` y `achievements` en `strings.js` |
+| Acciones de la paleta de comandos             | `commands` en `src/App.jsx`                        |
 
 Las insignias del panel perforado se generan solas desde `experience.json` (las cinco primeras
 entradas), así que añadir o quitar un empleo ahí cambia también la escena.

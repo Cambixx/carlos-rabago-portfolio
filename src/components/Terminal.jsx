@@ -13,7 +13,7 @@ const COMMANDS = [
     'help', 'ayuda', 'whoami', 'fetch', 'ls', 'proyectos', 'projects', 'open', 'abrir', 'exp', 'experiencia', 'experience',
     'cd', 'contacto', 'contact', 'cv', 'email', 'correo', 'tiempo', 'weather', 'dia', 'day', 'atardecer', 'dusk', 'noche',
     'night', 'lampara', 'lamp', 'musica', 'music', 'lang', 'idioma', 'date', 'fecha', 'hora', 'clear', 'cls', 'echo',
-    'history', 'historial', 'sudo', 'rm', 'exit', 'salir',
+    'history', 'historial', 'sudo', 'rm', 'exit', 'salir', 'tour', 'gravedad', 'gravity',
 ];
 const SECTION_ALIASES = {
     proyectos: 'projects',
@@ -221,7 +221,17 @@ export default function Terminal({ autoFocus = false }) {
                 if (history.current.length <= 1) say(T.history, 'dim');
                 else pairs(history.current.slice(0, -1).map((h, i) => [String(i + 1), h]));
                 break;
+            case 'tour':
+                say(T.tour, 'dim');
+                after = () => actions.startTour?.();
+                break;
+            case 'gravedad':
+            case 'gravity':
+                say(T.gravity, 'ok');
+                after = () => actions.setGravity?.(true);
+                break;
             case 'sudo':
+                actions.unlock?.('hacker');
                 if (/^(contratar|hire)\s+carlos$/i.test(args.join(' '))) {
                     say(T.sudoPrompt, 'dim');
                     say(T.sudoGranted, 'ok');
